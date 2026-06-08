@@ -20,7 +20,7 @@ jobs:
         
       - name: Build Web
         # Changed base-href to "/" because the custom domain maps to the root
-        run: flutter build web --base-href "/"
+        run: flutter build web --base-href "/" --no-wasm-dry-run
         
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

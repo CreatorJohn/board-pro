@@ -10,6 +10,7 @@ import 'providers/autosave_provider.dart';
 import 'providers/canvas_provider.dart';
 import 'providers/storage_provider.dart';
 import 'models/board_objects.dart';
+import 'package:uuid/uuid.dart';
 
 final canvasKeyProvider = Provider((ref) => GlobalKey());
 
@@ -151,9 +152,9 @@ class MenuPage extends ConsumerWidget {
 
     if (title != null && title.isNotEmpty) {
       final newBoard = Whiteboard(
+        id: const Uuid().v4(),
         title: title,
-        objectsByCell: {},
-        version: 1,
+        cells: {},
       );
       ref.read(whiteboardProvider.notifier).setWhiteboard(newBoard);
       Navigator.push(
