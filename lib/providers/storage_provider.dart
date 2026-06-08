@@ -7,6 +7,7 @@ import '../models/board_objects.dart';
 class StorageNotifier extends Notifier<List<String>> {
   @override
   List<String> build() {
+    refreshBoards();
     return [];
   }
 
@@ -23,6 +24,8 @@ class StorageNotifier extends Notifier<List<String>> {
   Future<void> refreshBoards() async {
     final path = await _localPath;
     final dir = Directory(path);
+    if (!await dir.exists()) return;
+    
     final files = dir.listSync();
     state = files
         .whereType<File>()
@@ -53,6 +56,22 @@ class StorageNotifier extends Notifier<List<String>> {
     final file = File('$path/$title.json');
     if (await file.exists()) {
       await file.delete();
+    }
+    await refreshBoards();
+  }
+
+  Future<void> renameBoard(String oldTitle, String newTitle) async {
+    final path = await _localPath;
+    final oldFile = File('$path/$oldTitle.json');
+    final newFile = File('$path/$newTitle.json');
+    
+    if (await oldFile.exists()) {
+      final content = await oldFile.readAsString();
+      final boardMap = jsonDecode(content) as Map<String, dynamic>;
+      boardMap['title'] = newTitle;
+      
+      await newFile.writeAsString(jsonEncode(boardMap));
+      await oldFile.delete();
     }
     await refreshBoards();
   }
