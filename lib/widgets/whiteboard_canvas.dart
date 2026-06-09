@@ -122,20 +122,30 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
 
   String? _hitTest(Offset globalPos) {
     final cells = ref.read(whiteboardProvider).whiteboard.cells;
-    // Iterate cells in reverse to find top-most object
-    final cellKeys = cells.keys.toList()..sort((a, b) => b.compareTo(a));
-    
-    for (final key in cellKeys) {
-      final coords = key.split(' ');
-      final cellOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
-      final objects = cells[key]!;
+    final List<({Offset origin, BoardObject obj})> allObjects = [];
+
+    for (final entry in cells.entries) {
+      final coords = entry.key.split(' ');
+      if (coords.length != 2) continue;
+      final cx = int.tryParse(coords[0]);
+      final cy = int.tryParse(coords[1]);
+      if (cx == null || cy == null) continue;
+      final cellOrigin = Offset(cx * cellSize, cy * cellSize);
       
-      // Iterate objects in reverse (front to back)
-      for (final obj in objects.reversed) {
-        final rect = Rect.fromLTWH(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y, obj.width, obj.height);
-        if (rect.contains(globalPos)) {
-          return obj.id;
-        }
+      for (final obj in entry.value) {
+        allObjects.add((origin: cellOrigin, obj: obj));
+      }
+    }
+
+    // Sort by createdAt DESC (front to back)
+    allObjects.sort((a, b) => b.obj.createdAt.compareTo(a.obj.createdAt));
+    
+    for (final item in allObjects) {
+      final obj = item.obj;
+      final cellOrigin = item.origin;
+      final rect = Rect.fromLTWH(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y, obj.width, obj.height);
+      if (rect.contains(globalPos)) {
+        return obj.id;
       }
     }
     return null;
@@ -455,6 +465,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
                 
                 final activeObjects = allObjects.where((o) => selectedIds.contains(o.id) || !isBakeable(o)).toList();
+                activeObjects.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
                 return activeObjects.map((obj) {
                   return ObjectWrapper(

@@ -11,6 +11,7 @@ abstract class BoardObject {
   final double height;
   final double rotation;
   final int zIndex;
+  final int createdAt;
 
   BoardObject({
     required this.id,
@@ -20,7 +21,8 @@ abstract class BoardObject {
     required this.height,
     this.rotation = 0,
     required this.zIndex,
-  });
+    int? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   Map<String, dynamic> toJson();
   BoardObject copyWith({
@@ -30,6 +32,7 @@ abstract class BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
   });
 
   static BoardObject fromJson(Map<String, dynamic> json) {
@@ -56,6 +59,7 @@ class DrawingObject extends BoardObject {
     required super.height,
     super.rotation,
     required super.zIndex,
+    super.createdAt,
     required this.points,
     required this.color,
     required this.strokeWidth,
@@ -71,6 +75,7 @@ class DrawingObject extends BoardObject {
         'height': height,
         'rotation': rotation,
         'zIndex': zIndex,
+        'createdAt': createdAt,
         'points': points.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
         'color': color,
         'strokeWidth': strokeWidth,
@@ -84,6 +89,7 @@ class DrawingObject extends BoardObject {
         height: json['height'].toDouble(),
         rotation: (json['rotation'] ?? 0).toDouble(),
         zIndex: json['zIndex'],
+        createdAt: json['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
         points: (json['points'] as List)
             .map((p) => Offset(p['dx'].toDouble(), p['dy'].toDouble()))
             .toList(),
@@ -99,6 +105,7 @@ class DrawingObject extends BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
     List<Offset>? points,
     int? color,
     double? strokeWidth,
@@ -111,6 +118,7 @@ class DrawingObject extends BoardObject {
         height: height ?? this.height,
         rotation: rotation ?? this.rotation,
         zIndex: zIndex ?? this.zIndex,
+        createdAt: createdAt ?? this.createdAt,
         points: points ?? this.points,
         color: color ?? this.color,
         strokeWidth: strokeWidth ?? this.strokeWidth,
@@ -130,6 +138,7 @@ class TextObject extends BoardObject {
     required super.height,
     super.rotation,
     required super.zIndex,
+    super.createdAt,
     required this.text,
     required this.color,
     required this.fontSize,
@@ -145,6 +154,7 @@ class TextObject extends BoardObject {
         'height': height,
         'rotation': rotation,
         'zIndex': zIndex,
+        'createdAt': createdAt,
         'text': text,
         'color': color,
         'fontSize': fontSize,
@@ -158,6 +168,7 @@ class TextObject extends BoardObject {
         height: json['height'].toDouble(),
         rotation: (json['rotation'] ?? 0).toDouble(),
         zIndex: json['zIndex'],
+        createdAt: json['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
         text: json['text'],
         color: json['color'],
         fontSize: json['fontSize'].toDouble(),
@@ -171,6 +182,7 @@ class TextObject extends BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
     String? text,
     int? color,
     double? fontSize,
@@ -183,6 +195,7 @@ class TextObject extends BoardObject {
         height: height ?? this.height,
         rotation: rotation ?? this.rotation,
         zIndex: zIndex ?? this.zIndex,
+        createdAt: createdAt ?? this.createdAt,
         text: text ?? this.text,
         color: color ?? this.color,
         fontSize: fontSize ?? this.fontSize,
@@ -202,6 +215,7 @@ class ShapeObject extends BoardObject {
     required super.height,
     super.rotation,
     required super.zIndex,
+    super.createdAt,
     required this.shapeType,
     required this.color,
     this.text,
@@ -217,6 +231,7 @@ class ShapeObject extends BoardObject {
         'height': height,
         'rotation': rotation,
         'zIndex': zIndex,
+        'createdAt': createdAt,
         'shapeType': shapeType.name,
         'color': color,
         'text': text,
@@ -230,6 +245,7 @@ class ShapeObject extends BoardObject {
         height: json['height'].toDouble(),
         rotation: (json['rotation'] ?? 0).toDouble(),
         zIndex: json['zIndex'],
+        createdAt: json['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
         shapeType: ShapeType.values.byName(json['shapeType']),
         color: json['color'],
         text: json['text'],
@@ -243,6 +259,7 @@ class ShapeObject extends BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
     ShapeType? shapeType,
     int? color,
     String? text,
@@ -255,6 +272,7 @@ class ShapeObject extends BoardObject {
         height: height ?? this.height,
         rotation: rotation ?? this.rotation,
         zIndex: zIndex ?? this.zIndex,
+        createdAt: createdAt ?? this.createdAt,
         shapeType: shapeType ?? this.shapeType,
         color: color ?? this.color,
         text: text ?? this.text,
@@ -276,6 +294,7 @@ class LineObject extends BoardObject {
     required super.height,
     super.rotation,
     required super.zIndex,
+    super.createdAt,
     required this.start,
     required this.end,
     required this.color,
@@ -293,6 +312,7 @@ class LineObject extends BoardObject {
         'height': height,
         'rotation': rotation,
         'zIndex': zIndex,
+        'createdAt': createdAt,
         'start': {'dx': start.dx, 'dy': start.dy},
         'end': {'dx': end.dx, 'dy': end.dy},
         'color': color,
@@ -308,6 +328,7 @@ class LineObject extends BoardObject {
         height: json['height'].toDouble(),
         rotation: (json['rotation'] ?? 0).toDouble(),
         zIndex: json['zIndex'],
+        createdAt: json['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
         start: Offset(json['start']['dx'].toDouble(), json['start']['dy'].toDouble()),
         end: Offset(json['end']['dx'].toDouble(), json['end']['dy'].toDouble()),
         color: json['color'],
@@ -323,6 +344,7 @@ class LineObject extends BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
     Offset? start,
     Offset? end,
     int? color,
@@ -337,6 +359,7 @@ class LineObject extends BoardObject {
         height: height ?? this.height,
         rotation: rotation ?? this.rotation,
         zIndex: zIndex ?? this.zIndex,
+        createdAt: createdAt ?? this.createdAt,
         start: start ?? this.start,
         end: end ?? this.end,
         color: color ?? this.color,
@@ -356,6 +379,7 @@ class ImageObject extends BoardObject {
     required super.height,
     super.rotation,
     required super.zIndex,
+    super.createdAt,
     required this.imagePath,
   });
 
@@ -369,6 +393,7 @@ class ImageObject extends BoardObject {
         'height': height,
         'rotation': rotation,
         'zIndex': zIndex,
+        'createdAt': createdAt,
         'imagePath': imagePath,
       };
 
@@ -380,6 +405,7 @@ class ImageObject extends BoardObject {
         height: json['height'].toDouble(),
         rotation: (json['rotation'] ?? 0).toDouble(),
         zIndex: json['zIndex'],
+        createdAt: json['createdAt'] ?? DateTime.now().millisecondsSinceEpoch,
         imagePath: json['imagePath'],
       );
 
@@ -391,6 +417,7 @@ class ImageObject extends BoardObject {
     double? height,
     double? rotation,
     int? zIndex,
+    int? createdAt,
     String? imagePath,
   }) =>
       ImageObject(
@@ -401,6 +428,7 @@ class ImageObject extends BoardObject {
         height: height ?? this.height,
         rotation: rotation ?? this.rotation,
         zIndex: zIndex ?? this.zIndex,
+        createdAt: createdAt ?? this.createdAt,
         imagePath: imagePath ?? this.imagePath,
       );
 }

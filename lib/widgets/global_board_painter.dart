@@ -14,30 +14,42 @@ class GlobalBoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Gather all objects from all cells to ensure stable global sorting
+    final List<({Offset origin, BoardObject obj})> allObjects = [];
+    
     for (final entry in cells.entries) {
       final coords = entry.key.split(' ');
-      final cx = int.parse(coords[0]);
-      final cy = int.parse(coords[1]);
+      if (coords.length != 2) continue;
+      final cx = int.tryParse(coords[0]);
+      final cy = int.tryParse(coords[1]);
+      if (cx == null || cy == null) continue;
+      
       final cellOrigin = Offset(cx * cellSize, cy * cellSize);
-
       for (final obj in entry.value) {
-        // Only draw objects that are NOT selected (selected objects are widgets)
-        // Also only bake bakeable types
         if (selectedIds.contains(obj.id)) continue;
         if (!(obj is DrawingObject || obj is LineObject)) continue;
-
-        canvas.save();
-        canvas.translate(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y);
-        
-        if (obj.rotation != 0) {
-          canvas.translate(obj.width / 2, obj.height / 2);
-          canvas.rotate(obj.rotation);
-          canvas.translate(-obj.width / 2, -obj.height / 2);
-        }
-
-        _drawObject(canvas, obj);
-        canvas.restore();
+        allObjects.add((origin: cellOrigin, obj: obj));
       }
+    }
+
+    // Sort by createdAt (back to front)
+    allObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
+
+    for (final item in allObjects) {
+      final obj = item.obj;
+      final cellOrigin = item.origin;
+
+      canvas.save();
+      canvas.translate(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y);
+      
+      if (obj.rotation != 0) {
+        canvas.translate(obj.width / 2, obj.height / 2);
+        canvas.rotate(obj.rotation);
+        canvas.translate(-obj.width / 2, -obj.height / 2);
+      }
+
+      _drawObject(canvas, obj);
+      canvas.restore();
     }
   }
 
