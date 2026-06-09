@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/board_objects.dart';
@@ -439,8 +440,10 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 final cellGlobalOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
                 
                 final allObjects = cellEntry.value;
-                final bakedObjects = allObjects.where((o) => !selectedIds.contains(o.id)).toList();
-                final activeObjects = allObjects.where((o) => selectedIds.contains(o.id)).toList();
+                bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
+                
+                final bakedObjects = allObjects.where((o) => !selectedIds.contains(o.id) && isBakeable(o)).toList();
+                final activeObjects = allObjects.where((o) => selectedIds.contains(o.id) || !isBakeable(o)).toList();
 
                 return [
                   // The "Baked" layer for this cell

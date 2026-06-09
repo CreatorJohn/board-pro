@@ -59,22 +59,6 @@ class CellPainter extends CustomPainter {
         canvas.drawPath(arrowPath, Paint()..color = Color(obj.color));
         canvas.restore();
       }
-    } else if (obj is ShapeObject) {
-      final paint = Paint()
-        ..color = Color(obj.color)
-        ..strokeWidth = 2.0
-        ..style = PaintingStyle.stroke;
-
-      if (obj.shapeType == ShapeType.rectangle) {
-        canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), paint);
-      } else if (obj.shapeType == ShapeType.circle) {
-        canvas.drawOval(Rect.fromLTWH(0, 0, obj.width, obj.height), paint);
-      } else if (obj.shapeType == ShapeType.stickyNote) {
-        final bgPaint = Paint()..color = Color(obj.color)..style = PaintingStyle.fill;
-        canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), bgPaint);
-        // Note: Text rendering in CustomPainter is complex, usually handled via TextPainter
-        // For now, we mainly want to fix the drawing artifacts.
-      }
     }
   }
 

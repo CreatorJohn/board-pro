@@ -153,6 +153,7 @@ class MenuPage extends ConsumerWidget {
     final board = await ref.read(storageProvider.notifier).loadBoard(title);
     if (board != null) {
       ref.read(whiteboardProvider.notifier).setWhiteboard(board);
+      if (!context.mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const WhiteboardPage()),
@@ -266,8 +267,8 @@ class WhiteboardPage extends ConsumerWidget {
                   top: 20,
                   child: FloatingActionButton.small(
                     onPressed: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back),
                     tooltip: 'Back to Menu',
+                    child: const Icon(Icons.arrow_back),
                   ),
                 ),
 
