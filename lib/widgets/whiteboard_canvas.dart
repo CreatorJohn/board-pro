@@ -328,16 +328,19 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     double minY = _currentPoints.map((p) => p.dy).reduce(min);
     double maxY = _currentPoints.map((p) => p.dy).reduce(max);
 
-    // Normalize points relative to the minX/minY of the bounding box
-    final normalizedPoints = _currentPoints.map((p) => Offset(p.dx - minX, p.dy - minY)).toList();
+    // Add padding to account for stroke width and caps
+    final padding = tool.strokeWidth * 1.5;
+    
+    // Normalize points relative to the inflated bounding box
+    final normalizedPoints = _currentPoints.map((p) => Offset(p.dx - minX + padding, p.dy - minY + padding)).toList();
 
     final drawing = DrawingObject(
       id: const Uuid().v4(),
-      // Position relative to the cell origin
-      x: minX - cellGlobalOrigin.dx,
-      y: minY - cellGlobalOrigin.dy,
-      width: (maxX - minX).clamp(1.0, 50000.0),
-      height: (maxY - minY).clamp(1.0, 50000.0),
+      // Position relative to the cell origin, adjusted for padding
+      x: (minX - cellGlobalOrigin.dx) - padding,
+      y: (minY - cellGlobalOrigin.dy) - padding,
+      width: (maxX - minX + (padding * 2)).clamp(1.0, 50000.0),
+      height: (maxY - minY + (padding * 2)).clamp(1.0, 50000.0),
       zIndex: 0,
       points: normalizedPoints,
       color: tool.color.toARGB32(),
