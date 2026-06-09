@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -320,6 +321,13 @@ class FileSubPanel extends ConsumerWidget {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final pngBytes = byteData.buffer.asUint8List();
+
+      if (kIsWeb) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exporting not fully supported on Web yet.')));
+        }
+        return;
+      }
 
       final directory = await getApplicationDocumentsDirectory();
       final finalName = fileName ?? 'board_${DateTime.now().millisecondsSinceEpoch}';

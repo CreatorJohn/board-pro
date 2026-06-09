@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -542,6 +543,13 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     } else if (obj is LineObject) {
        return CustomPaint(size: Size(obj.width, obj.height), painter: LinePainter(obj));
     } else if (obj is ImageObject) {
+      if (kIsWeb) {
+        return Container(
+          width: obj.width, height: obj.height,
+          color: Colors.grey.shade200,
+          child: const Center(child: Text('Images not supported on Web yet')),
+        );
+      }
       return Image.file(File(obj.imagePath), width: obj.width, height: obj.height, fit: BoxFit.fill);
     }
     return const SizedBox.shrink();

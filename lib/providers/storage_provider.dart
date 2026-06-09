@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/board_objects.dart';
 
 class StorageNotifier extends Notifier<List<String>> {
@@ -11,67 +10,42 @@ class StorageNotifier extends Notifier<List<String>> {
     return [];
   }
 
-  Future<String> get _localPath async {
-    final directory = await getApplicationDocumentsDirectory();
-    final path = '${directory.path}/whiteboards';
-    final dir = Directory(path);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return path;
-  }
-
   Future<void> refreshBoards() async {
-    final path = await _localPath;
-    final dir = Directory(path);
-    if (!await dir.exists()) return;
-    
-    final files = dir.listSync();
-    state = files
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.json'))
-        .map((f) => f.path.split('/').last.replaceAll('.json', ''))
-        .toList();
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('board_')).toList();
+    state = keys.map((k) => k.replaceFirst('board_', '')).toList();
   }
 
   Future<void> saveBoard(Whiteboard board) async {
-    final path = await _localPath;
-    final file = File('$path/${board.title}.json');
-    await file.writeAsString(jsonEncode(board.toJson()));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('board_${board.title}', jsonEncode(board.toJson()));
     await refreshBoards();
   }
 
   Future<Whiteboard?> loadBoard(String title) async {
-    final path = await _localPath;
-    final file = File('$path/$title.json');
-    if (await file.exists()) {
-      final content = await file.readAsString();
+    final prefs = await SharedPreferences.getInstance();
+    final content = prefs.getString('board_$title');
+    if (content != null) {
       return Whiteboard.fromJson(jsonDecode(content));
     }
     return null;
   }
 
   Future<void> deleteBoard(String title) async {
-    final path = await _localPath;
-    final file = File('$path/$title.json');
-    if (await file.exists()) {
-      await file.delete();
-    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('board_$title');
     await refreshBoards();
   }
 
   Future<void> renameBoard(String oldTitle, String newTitle) async {
-    final path = await _localPath;
-    final oldFile = File('$path/$oldTitle.json');
-    final newFile = File('$path/$newTitle.json');
-    
-    if (await oldFile.exists()) {
-      final content = await oldFile.readAsString();
+    final prefs = await SharedPreferences.getInstance();
+    final content = prefs.getString('board_$oldTitle');
+    if (content != null) {
       final boardMap = jsonDecode(content) as Map<String, dynamic>;
       boardMap['title'] = newTitle;
       
-      await newFile.writeAsString(jsonEncode(boardMap));
-      await oldFile.delete();
+      await prefs.setString('board_$newTitle', jsonEncode(boardMap));
+      await prefs.remove('board_$oldTitle');
     }
     await refreshBoards();
   }
