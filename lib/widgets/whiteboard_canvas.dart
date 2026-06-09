@@ -11,6 +11,7 @@ import '../providers/canvas_provider.dart';
 import 'object_wrapper.dart';
 import 'drawing_painter.dart';
 import 'grid_painter.dart';
+import 'cell_painter.dart';
 
 class WhiteboardCanvas extends ConsumerStatefulWidget {
   const WhiteboardCanvas({super.key});
@@ -75,7 +76,21 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final isStylus = event.kind == PointerDeviceKind.stylus;
     final isTouchOrMouse = event.kind == PointerDeviceKind.touch || event.kind == PointerDeviceKind.mouse;
 
-    if (tool.toolType == ToolType.draw) {
+    if (tool.toolType == ToolType.select) {
+      // Check if we hit an object to select it
+      final hitObjId = _hitTest(globalPos);
+      if (hitObjId != null) {
+        final multi = HardwareKeyboard.instance.isShiftPressed;
+        ref.read(whiteboardProvider.notifier).selectObject(hitObjId, multi: multi);
+      } else {
+        setState(() {
+          _isSelecting = true;
+          _selectionStart = globalPos;
+          _selectionEnd = globalPos;
+        });
+        ref.read(whiteboardProvider.notifier).selectObject(null);
+      }
+    } else if (tool.toolType == ToolType.draw) {
       if (isStylus || (isTouchOrMouse && !_isStylusActive)) {
         setState(() {
           _isDrawing = true;
@@ -102,14 +117,28 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         _isManualPanning = false;
         _isActionInProgress = true;
       }
-    } else if (tool.toolType == ToolType.select) {
-      setState(() {
-        _isSelecting = true;
-        _selectionStart = globalPos;
-        _selectionEnd = globalPos;
-      });
-      ref.read(whiteboardProvider.notifier).selectObject(null);
     }
+  }
+
+  String? _hitTest(Offset globalPos) {
+    final cells = ref.read(whiteboardProvider).whiteboard.cells;
+    // Iterate cells in reverse to find top-most object
+    final cellKeys = cells.keys.toList()..sort((a, b) => b.compareTo(a));
+    
+    for (final key in cellKeys) {
+      final coords = key.split(' ');
+      final cellOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
+      final objects = cells[key]!;
+      
+      // Iterate objects in reverse (front to back)
+      for (final obj in objects.reversed) {
+        final rect = Rect.fromLTWH(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y, obj.width, obj.height);
+        if (rect.contains(globalPos)) {
+          return obj.id;
+        }
+      }
+    }
+    return null;
   }
 
   void _onPointerMove(PointerMoveEvent event, ToolState tool, TransformationController controller) {
@@ -195,6 +224,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   void _finishSelection() {
     if (_selectionStart == null || _selectionEnd == null) return;
     final rect = Rect.fromPoints(_selectionStart!, _selectionEnd!);
+    if (rect.width < 2 && rect.height < 2) return;
+
     final selectedIds = <String>{};
 
     final cells = ref.read(whiteboardProvider).whiteboard.cells;
@@ -361,6 +392,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final toolState = ref.watch(toolProvider);
     final transformationController = ref.watch(transformationControllerProvider);
     final screenSize = MediaQuery.sizeOf(context);
+    final selectedIds = whiteboardState.selectedObjectIds;
 
     final isEraser = toolState.toolType == ToolType.objectEraser || toolState.toolType == ToolType.pointEraser;
     final canPan = !_isActionInProgress && (toolState.toolType == ToolType.move || 
@@ -411,14 +443,34 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 final cellKey = cellEntry.key;
                 final coords = cellKey.split(' ');
                 final cellGlobalOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
-                return cellEntry.value.map((obj) {
-                  return ObjectWrapper(
-                    key: ValueKey(obj.id),
-                    cellKey: cellKey,
-                    object: obj.copyWith(x: cellGlobalOrigin.dx + obj.x, y: cellGlobalOrigin.dy + obj.y),
-                    child: _buildObjectContent(obj),
-                  );
-                });
+                
+                final allObjects = cellEntry.value;
+                final bakedObjects = allObjects.where((o) => !selectedIds.contains(o.id)).toList();
+                final activeObjects = allObjects.where((o) => selectedIds.contains(o.id)).toList();
+
+                return [
+                  // The "Baked" layer for this cell
+                  if (bakedObjects.isNotEmpty)
+                    Positioned(
+                      left: cellGlobalOrigin.dx,
+                      top: cellGlobalOrigin.dy,
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          size: const Size(cellSize, cellSize),
+                          painter: CellPainter(bakedObjects),
+                        ),
+                      ),
+                    ),
+                  // The "Active" layer for selected objects
+                  ...activeObjects.map((obj) {
+                    return ObjectWrapper(
+                      key: ValueKey(obj.id),
+                      cellKey: cellKey,
+                      object: obj.copyWith(x: cellGlobalOrigin.dx + obj.x, y: cellGlobalOrigin.dy + obj.y),
+                      child: _buildObjectContent(obj),
+                    );
+                  }),
+                ];
               }),
               if (_currentPoints.isNotEmpty)
                 CustomPaint(
