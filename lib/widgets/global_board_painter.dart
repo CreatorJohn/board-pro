@@ -2,47 +2,15 @@ import 'package:flutter/material.dart';
 import '../models/board_objects.dart';
 
 class GlobalBoardPainter extends CustomPainter {
-  final Map<String, List<BoardObject>> cells;
-  final Set<String> selectedIds;
-  final double cellSize;
-  final Rect viewport;
+  final List<({Offset origin, BoardObject obj})> sortedObjects;
 
   GlobalBoardPainter({
-    required this.cells,
-    required this.selectedIds,
-    required this.cellSize,
-    required this.viewport,
+    required this.sortedObjects,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Gather all objects from visible cells to ensure stable global sorting
-    final List<({Offset origin, BoardObject obj})> allObjects = [];
-
-    final minCx = (viewport.left / cellSize).floor();
-    final maxCx = (viewport.right / cellSize).floor();
-    final minCy = (viewport.top / cellSize).floor();
-    final maxCy = (viewport.bottom / cellSize).floor();
-
-    for (int cx = minCx; cx <= maxCx; cx++) {
-      for (int cy = minCy; cy <= maxCy; cy++) {
-        final key = "$cx $cy";
-        final cellObjects = cells[key];
-        if (cellObjects == null) continue;
-
-        final cellOrigin = Offset(cx * cellSize, cy * cellSize);
-        for (final obj in cellObjects) {
-          if (selectedIds.contains(obj.id)) continue;
-          if (!(obj is DrawingObject || obj is LineObject)) continue;
-          allObjects.add((origin: cellOrigin, obj: obj));
-        }
-      }
-    }
-
-    // Sort by createdAt (back to front)
-    allObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
-
-    for (final item in allObjects) {
+    for (final item in sortedObjects) {
       final obj = item.obj;
       final cellOrigin = item.origin;
 
@@ -102,8 +70,6 @@ class GlobalBoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GlobalBoardPainter oldDelegate) {
-    return oldDelegate.cells != cells || 
-           oldDelegate.selectedIds != selectedIds ||
-           oldDelegate.viewport != viewport;
+    return oldDelegate.sortedObjects != sortedObjects;
   }
 }

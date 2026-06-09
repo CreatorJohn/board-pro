@@ -256,10 +256,7 @@ class WhiteboardPage extends ConsumerWidget {
           child: Scaffold(
             body: Stack(
               children: [
-                RepaintBoundary(
-                  key: canvasKey,
-                  child: const WhiteboardCanvas(),
-                ),
+                const WhiteboardCanvas(),
                 
                 // Back to Menu Button
                 Positioned(

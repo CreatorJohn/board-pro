@@ -419,6 +419,27 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final minCy = (viewport.top / cellSize).floor();
     final maxCy = (viewport.bottom / cellSize).floor();
 
+    // Prepare bakeable objects once per build, pre-sorted
+    final List<({Offset origin, BoardObject obj})> bakeableObjects = [];
+    final cells = whiteboardState.whiteboard.cells;
+    bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
+
+    for (int cx = minCx; cx <= maxCx; cx++) {
+      for (int cy = minCy; cy <= maxCy; cy++) {
+        final key = "$cx $cy";
+        final cellObjects = cells[key];
+        if (cellObjects == null) continue;
+        
+        final cellOrigin = Offset(cx * cellSize, cy * cellSize);
+        for (final obj in cellObjects) {
+          if (!selectedIds.contains(obj.id) && isBakeable(obj)) {
+            bakeableObjects.add((origin: cellOrigin, obj: obj));
+          }
+        }
+      }
+    }
+    bakeableObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
+
     return InteractiveViewer(
       transformationController: transformationController,
       constrained: false,
@@ -443,10 +464,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
               Positioned.fill(
                 child: CustomPaint(
                   painter: GlobalBoardPainter(
-                    cells: whiteboardState.whiteboard.cells,
-                    selectedIds: selectedIds,
-                    cellSize: cellSize,
-                    viewport: viewport,
+                    sortedObjects: bakeableObjects,
                   ),
                 ),
               ),
