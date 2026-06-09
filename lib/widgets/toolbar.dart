@@ -1,19 +1,11 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../providers/tool_provider.dart';
 import '../providers/whiteboard_provider.dart';
 import '../providers/storage_provider.dart';
 import '../models/board_objects.dart';
-import '../main.dart';
 
 enum ToolbarCategory { none, draw, insert, file, eraser }
 
@@ -131,12 +123,10 @@ class DrawSubPanel extends ConsumerWidget {
             max: 20.0,
             onChanged: (v) => ref.read(toolProvider.notifier).setStrokeWidth(v),
           ),
-          const Text('Color', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-          _ColorPicker(onSelected: (c) => ref.read(toolProvider.notifier).setColor(c), selected: toolState.color),
-        ],
-      ),
-    );
-  }
+          ],
+          ),
+          );
+          }
 
   Widget _buildToolItem(WidgetRef ref, ToolType type, IconData icon, String label) {
     final isSelected = ref.watch(toolProvider).toolType == type;
@@ -262,101 +252,10 @@ class FileSubPanel extends ConsumerWidget {
         children: [
           IconButton(icon: const Icon(Icons.save), onPressed: () => _showSaveDialog(context, ref), tooltip: 'Save'),
           IconButton(icon: const Icon(Icons.folder_open), onPressed: () => _showLoadDialog(context, ref), tooltip: 'Load'),
-          IconButton(icon: const Icon(Icons.download), onPressed: () => _showExportDialog(context, ref), tooltip: 'Export'),
           IconButton(icon: const Icon(Icons.delete_sweep), onPressed: () => ref.read(whiteboardProvider.notifier).clearBoard(), tooltip: 'Clear Board'),
         ],
       ),
     );
-  }
-
-  void _showExportDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController(text: 'board_${DateTime.now().millisecondsSinceEpoch}');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Export Board'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter a filename and select a format:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Filename',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              final fileName = controller.text.trim();
-              Navigator.pop(ctx);
-              _export(context, ref, isPdf: false, fileName: fileName.isEmpty ? null : fileName);
-            },
-            child: const Text('PNG Image'),
-          ),
-          TextButton(
-            onPressed: () {
-              final fileName = controller.text.trim();
-              Navigator.pop(ctx);
-              _export(context, ref, isPdf: true, fileName: fileName.isEmpty ? null : fileName);
-            },
-            child: const Text('PDF Document'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _export(BuildContext context, WidgetRef ref, {required bool isPdf, String? fileName}) async {
-    try {
-      final canvasKey = ref.read(canvasKeyProvider);
-      final boundary = canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
-
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final pngBytes = byteData.buffer.asUint8List();
-
-      if (kIsWeb) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exporting not fully supported on Web yet.')));
-        }
-        return;
-      }
-
-      final directory = await getApplicationDocumentsDirectory();
-      final finalName = fileName ?? 'board_${DateTime.now().millisecondsSinceEpoch}';
-      late File file;
-
-      if (isPdf) {
-        final pdf = pw.Document();
-        final pdfImage = pw.MemoryImage(pngBytes);
-        pdf.addPage(pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context context) {
-            return pw.Center(child: pw.Image(pdfImage));
-          },
-        ));
-        file = File('${directory.path}/$finalName.pdf');
-        await file.writeAsBytes(await pdf.save());
-      } else {
-        file = File('${directory.path}/$finalName.png');
-        await file.writeAsBytes(pngBytes);
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported to ${file.path}')));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
-      }
-    }
   }
 
   void _showSaveDialog(BuildContext context, WidgetRef ref) {
@@ -496,26 +395,3 @@ class _SubPanelWrapper extends StatelessWidget {
   }
 }
 
-class _ColorPicker extends StatelessWidget {
-  final Function(Color) onSelected;
-  final Color selected;
-  const _ColorPicker({required this.onSelected, required this.selected});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = [Colors.black, Colors.red, Colors.green, Colors.blue, Colors.yellow, Colors.purple];
-    return Wrap(
-      spacing: 8,
-      children: colors.map((c) => GestureDetector(
-        onTap: () => onSelected(c),
-        child: Container(
-          width: 24, height: 24,
-          decoration: BoxDecoration(
-            color: c, shape: BoxShape.circle,
-            border: Border.all(color: selected == c ? Colors.blue : Colors.grey, width: selected == c ? 2 : 1),
-          ),
-        ),
-      )).toList(),
-    );
-  }
-}

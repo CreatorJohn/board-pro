@@ -4,15 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'widgets/whiteboard_canvas.dart';
 import 'widgets/toolbar.dart';
 import 'widgets/zoom_controls.dart';
-import 'widgets/context_menu.dart';
 import 'providers/whiteboard_provider.dart';
 import 'providers/autosave_provider.dart';
 import 'providers/canvas_provider.dart';
 import 'providers/storage_provider.dart';
 import 'models/board_objects.dart';
 import 'package:uuid/uuid.dart';
-
-final canvasKeyProvider = Provider((ref) => GlobalKey());
 
 void main() {
   runApp(
@@ -214,8 +211,6 @@ class WhiteboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canvasKey = ref.watch(canvasKeyProvider);
-    
     // Setup auto-save listener
     ref.listen(whiteboardProvider, (previous, next) {
       if (previous?.whiteboard != next.whiteboard) {
@@ -303,15 +298,6 @@ class WhiteboardPage extends ConsumerWidget {
                       const SizedBox(width: 12),
                       const ZoomControls(),
                     ],
-                  ),
-                ),
-
-                // Object Context Menu (Top Center)
-                const Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 20),
-                    child: ObjectContextMenu(),
                   ),
                 ),
               ],

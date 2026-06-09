@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +8,6 @@ import '../models/board_objects.dart';
 import '../providers/whiteboard_provider.dart';
 import '../providers/tool_provider.dart';
 import '../providers/canvas_provider.dart';
-import 'object_wrapper.dart';
-import 'drawing_painter.dart';
 import 'global_board_painter.dart';
 
 class WhiteboardCanvas extends ConsumerStatefulWidget {
@@ -411,9 +407,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     final maxCy = (viewport.bottom / cellSize).floor();
 
     // Prepare bakeable objects once per build, pre-sorted
-    final List<({Offset origin, BoardObject obj})> bakeableObjects = [];
+    final List<({Offset origin, BoardObject obj})> allSortedObjects = [];
     final cells = whiteboardState.whiteboard.cells;
-    bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
 
     for (int cx = minCx; cx <= maxCx; cx++) {
       for (int cy = minCy; cy <= maxCy; cy++) {
@@ -423,13 +418,11 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         
         final cellOrigin = Offset(cx * cellSize, cy * cellSize);
         for (final obj in cellObjects) {
-          if (!selectedIds.contains(obj.id) && isBakeable(obj)) {
-            bakeableObjects.add((origin: cellOrigin, obj: obj));
-          }
+          allSortedObjects.add((origin: cellOrigin, obj: obj));
         }
       }
     }
-    bakeableObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
+    allSortedObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
 
     return InteractiveViewer(
       transformationController: transformationController,
@@ -451,40 +444,40 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           height: screenSize.height,
           child: Stack(
             children: [
-              // 1. Static Baked Layer (Everything non-selected)
+              // 1. Static Layer (Everything is drawn via CustomPainter now)
               Positioned.fill(
                 child: CustomPaint(
                   painter: GlobalBoardPainter(
-                    sortedObjects: bakeableObjects,
+                    sortedObjects: allSortedObjects,
                   ),
                 ),
               ),
 
-              // 2. Active Widgets (Selected items + Non-bakeable items like Text/Images)
-              ...whiteboardState.whiteboard.cells.entries.where((entry) {
-                final coords = entry.key.split(' ');
-                final cx = int.parse(coords[0]);
-                final cy = int.parse(coords[1]);
-                return cx >= minCx && cx <= maxCx && cy >= minCy && cy <= maxCy;
-              }).expand((cellEntry) {
-                final cellKey = cellEntry.key;
-                final coords = cellKey.split(' ');
-                final cellGlobalOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
+              // 2. Selection Overlays (Simple border boxes for moving objects)
+              ...allSortedObjects.where((item) => selectedIds.contains(item.obj.id)).map((item) {
+                final obj = item.obj;
+                final origin = item.origin;
                 
-                final allObjects = cellEntry.value;
-                bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
-                
-                final activeObjects = allObjects.where((o) => selectedIds.contains(o.id) || !isBakeable(o)).toList();
-                activeObjects.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-                return activeObjects.map((obj) {
-                  return ObjectWrapper(
-                    key: ValueKey(obj.id),
-                    cellKey: cellKey,
-                    object: obj.copyWith(x: cellGlobalOrigin.dx + obj.x, y: cellGlobalOrigin.dy + obj.y),
-                    child: _buildObjectContent(obj),
-                  );
-                });
+                return Positioned(
+                  left: origin.dx + obj.x,
+                  top: origin.dy + obj.y,
+                  width: obj.width,
+                  height: obj.height,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: (details) {
+                      // Scale the drag delta down so dragging is consistent at high zoom
+                      final scaledDelta = details.delta / transformationController.value.getMaxScaleOnAxis();
+                      ref.read(whiteboardProvider.notifier).moveSelected(scaledDelta);
+                    },
+                    onPanEnd: (_) => ref.read(whiteboardProvider.notifier).endAction(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blueAccent, width: 2),
+                      ),
+                    ),
+                  ),
+                );
               }),
 
               // 3. Temporary Painters (While drawing)
@@ -532,48 +525,6 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
       ),
     );
   }
-
-  Widget _buildObjectContent(BoardObject obj) {
-    if (obj is DrawingObject) {
-      return CustomPaint(size: Size(obj.width, obj.height), painter: DrawingPainter(obj));
-    } else if (obj is TextObject) {
-      return Center(child: Text(obj.text, style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize)));
-    } else if (obj is ShapeObject) {
-      return _buildShape(obj);
-    } else if (obj is LineObject) {
-       return CustomPaint(size: Size(obj.width, obj.height), painter: LinePainter(obj));
-    } else if (obj is ImageObject) {
-      if (kIsWeb) {
-        return Container(
-          width: obj.width, height: obj.height,
-          color: Colors.grey.shade200,
-          child: const Center(child: Text('Images not supported on Web yet')),
-        );
-      }
-      return Image.file(File(obj.imagePath), width: obj.width, height: obj.height, fit: BoxFit.fill);
-    }
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildShape(ShapeObject obj) {
-    Widget shape;
-    switch (obj.shapeType) {
-      case ShapeType.rectangle:
-        shape = Container(decoration: BoxDecoration(border: Border.all(color: Color(obj.color), width: 2)));
-        break;
-      case ShapeType.circle:
-        shape = Container(decoration: BoxDecoration(border: Border.all(color: Color(obj.color), width: 2), shape: BoxShape.circle));
-        break;
-      case ShapeType.stickyNote:
-        shape = Container(
-          color: Color(obj.color),
-          padding: const EdgeInsets.all(8),
-          child: Center(child: Text(obj.text ?? '', style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-        );
-        break;
-    }
-    return shape;
-  }
 }
 
 class _GlobalDrawingPainter extends CustomPainter {
@@ -618,26 +569,4 @@ class _TempLinePainter extends CustomPainter {
   }
   @override
   bool shouldRepaint(covariant _TempLinePainter oldDelegate) => true;
-}
-
-class LinePainter extends CustomPainter {
-  final LineObject line;
-  LinePainter(this.line);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Color(line.color)..strokeWidth = line.strokeWidth..strokeCap = StrokeCap.round;
-    canvas.drawLine(line.start, line.end, paint);
-    if (line.hasArrow) {
-      final angle = (line.end - line.start).direction;
-      const arrowSize = 15.0;
-      canvas.save();
-      canvas.translate(line.end.dx, line.end.dy);
-      canvas.rotate(angle);
-      final arrowPath = Path()..moveTo(0, 0)..lineTo(-arrowSize, -arrowSize / 2)..lineTo(-arrowSize, arrowSize / 2)..close();
-      canvas.drawPath(arrowPath, Paint()..color = Color(line.color));
-      canvas.restore();
-    }
-  }
-  @override
-  bool shouldRepaint(covariant LinePainter oldDelegate) => oldDelegate.line != line;
 }

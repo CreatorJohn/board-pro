@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/board_objects.dart';
 
 class GlobalBoardPainter extends CustomPainter {
@@ -65,7 +66,56 @@ class GlobalBoardPainter extends CustomPainter {
         canvas.drawPath(arrowPath, Paint()..color = Color(obj.color));
         canvas.restore();
       }
+    } else if (obj is ShapeObject) {
+      final paint = Paint()
+        ..color = Color(obj.color)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
+
+      if (obj.shapeType == ShapeType.rectangle) {
+        canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), paint);
+      } else if (obj.shapeType == ShapeType.circle) {
+        canvas.drawOval(Rect.fromLTWH(0, 0, obj.width, obj.height), paint);
+      } else if (obj.shapeType == ShapeType.stickyNote) {
+        final bgPaint = Paint()..color = Color(obj.color)..style = PaintingStyle.fill;
+        canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), bgPaint);
+        
+        if (obj.text != null && obj.text!.isNotEmpty) {
+           _drawText(canvas, obj.text!, Colors.black, 16, obj.width, obj.height);
+        }
+      }
+    } else if (obj is TextObject) {
+      _drawText(canvas, obj.text, Color(obj.color), obj.fontSize, obj.width, obj.height);
+    } else if (obj is ImageObject) {
+      // For images, since CustomPainter is synchronous, drawing native images requires pre-loading.
+      // As a fallback for 100% canvas rendering without complex async caching, we draw a placeholder box.
+      final bgPaint = Paint()..color = Colors.grey.shade300..style = PaintingStyle.fill;
+      canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), bgPaint);
+      final borderPaint = Paint()..color = Colors.grey..style = PaintingStyle.stroke..strokeWidth = 2;
+      canvas.drawRect(Rect.fromLTWH(0, 0, obj.width, obj.height), borderPaint);
+      
+      String label = kIsWeb ? 'Image (Not supported on Web)' : 'Image: ${obj.imagePath.split('/').last}';
+      _drawText(canvas, label, Colors.black54, 12, obj.width, obj.height);
     }
+  }
+
+  void _drawText(Canvas canvas, String text, Color color, double fontSize, double width, double height) {
+    final textSpan = TextSpan(
+      text: text,
+      style: TextStyle(color: color, fontSize: fontSize, fontWeight: FontWeight.normal),
+    );
+    final textPainter = TextPainter(
+      text: textSpan,
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    textPainter.layout(minWidth: 0, maxWidth: width);
+    // Center text vertically
+    final offset = Offset(
+      (width - textPainter.width) / 2,
+      (height - textPainter.height) / 2,
+    );
+    textPainter.paint(canvas, offset);
   }
 
   @override
