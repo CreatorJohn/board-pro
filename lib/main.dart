@@ -266,6 +266,7 @@ class WhiteboardPage extends ConsumerWidget {
                   left: 20,
                   top: 20,
                   child: FloatingActionButton.small(
+                    heroTag: null, // Prevent Hero animation crash
                     onPressed: () => Navigator.pop(context),
                     tooltip: 'Back to Menu',
                     child: const Icon(Icons.arrow_back),
@@ -289,6 +290,7 @@ class WhiteboardPage extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       FloatingActionButton.small(
+                        heroTag: null, // Prevent Hero animation crash
                         tooltip: 'Center View',
                         onPressed: () {
                           ref.read(transformationControllerProvider).value = Matrix4.identity();
