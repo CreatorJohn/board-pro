@@ -454,11 +454,9 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                     Positioned(
                       left: cellGlobalOrigin.dx,
                       top: cellGlobalOrigin.dy,
-                      child: RepaintBoundary(
-                        child: CustomPaint(
-                          size: const Size(cellSize, cellSize),
-                          painter: CellPainter(bakedObjects),
-                        ),
+                      child: CustomPaint(
+                        size: const Size(cellSize, cellSize),
+                        painter: CellPainter(bakedObjects),
                       ),
                     ),
                   // The "Active" layer for selected objects
@@ -515,7 +513,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
 
   Widget _buildObjectContent(BoardObject obj) {
     if (obj is DrawingObject) {
-      return RepaintBoundary(child: CustomPaint(size: Size(obj.width, obj.height), painter: DrawingPainter(obj)));
+      return CustomPaint(size: Size(obj.width, obj.height), painter: DrawingPainter(obj));
     } else if (obj is TextObject) {
       return Center(child: Text(obj.text, style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize)));
     } else if (obj is ShapeObject) {
