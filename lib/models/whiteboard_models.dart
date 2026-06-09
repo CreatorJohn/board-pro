@@ -3,32 +3,32 @@ import 'dart:ui';
 class Whiteboard {
   final String id;
   final String title;
-  final Map<String, List<BoardObject>> cells;
+  final List<BoardObject> objects;
 
   Whiteboard({
     required this.id,
     required this.title,
-    required this.cells,
+    required this.objects,
   });
 
-  Whiteboard copyWith({String? id, String? title, Map<String, List<BoardObject>>? cells}) {
+  Whiteboard copyWith({String? id, String? title, List<BoardObject>? objects}) {
     return Whiteboard(
       id: id ?? this.id,
       title: title ?? this.title,
-      cells: cells ?? this.cells,
+      objects: objects ?? this.objects,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
-    'cells': cells.map((k, v) => MapEntry(k, v.map((o) => o.toJson()).toList())),
+    'objects': objects.map((o) => o.toJson()).toList(),
   };
 
   factory Whiteboard.fromJson(Map<String, dynamic> json) => Whiteboard(
     id: json['id'],
     title: json['title'],
-    cells: (json['cells'] as Map).map((k, v) => MapEntry(k.toString(), (v as List).map((o) => BoardObject.fromJson(o)).toList())),
+    objects: (json['objects'] as List).map((o) => BoardObject.fromJson(o)).toList(),
   );
 }
 
@@ -36,8 +36,6 @@ abstract class BoardObject {
   final String id;
   final double x;
   final double y;
-  final double width;
-  final double height;
   final double rotation;
   final int zIndex;
 
@@ -45,14 +43,12 @@ abstract class BoardObject {
     required this.id,
     required this.x,
     required this.y,
-    required this.width,
-    required this.height,
     this.rotation = 0.0,
     this.zIndex = 0,
   });
 
   Map<String, dynamic> toJson();
-  BoardObject copyWith({double? x, double? y, double? width, double? height, double? rotation, int? zIndex});
+  BoardObject copyWith({double? x, double? y, double? rotation, int? zIndex});
 
   factory BoardObject.fromJson(Map<String, dynamic> json) {
     if (json['type'] == 'drawing') return DrawingObject.fromJson(json);
@@ -69,8 +65,6 @@ class DrawingObject extends BoardObject {
     required super.id,
     required super.x,
     required super.y,
-    required super.width,
-    required super.height,
     super.rotation,
     super.zIndex,
     required this.points,
@@ -84,8 +78,6 @@ class DrawingObject extends BoardObject {
     'id': id,
     'x': x,
     'y': y,
-    'width': width,
-    'height': height,
     'rotation': rotation,
     'zIndex': zIndex,
     'points': points.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
@@ -97,8 +89,6 @@ class DrawingObject extends BoardObject {
     id: json['id'],
     x: json['x'],
     y: json['y'],
-    width: json['width'],
-    height: json['height'],
     rotation: json['rotation'] ?? 0.0,
     zIndex: json['zIndex'] ?? 0,
     points: (json['points'] as List).map((p) => Offset(p['dx'], p['dy'])).toList(),
@@ -107,13 +97,11 @@ class DrawingObject extends BoardObject {
   );
 
   @override
-  DrawingObject copyWith({double? x, double? y, double? width, double? height, double? rotation, int? zIndex, List<Offset>? points, int? color, double? strokeWidth}) {
+  DrawingObject copyWith({double? x, double? y, double? rotation, int? zIndex, List<Offset>? points, int? color, double? strokeWidth}) {
     return DrawingObject(
       id: id,
       x: x ?? this.x,
       y: y ?? this.y,
-      width: width ?? this.width,
-      height: height ?? this.height,
       rotation: rotation ?? this.rotation,
       zIndex: zIndex ?? this.zIndex,
       points: points ?? this.points,
@@ -132,8 +120,6 @@ class TextObject extends BoardObject {
     required super.id,
     required super.x,
     required super.y,
-    required super.width,
-    required super.height,
     super.rotation,
     super.zIndex,
     required this.text,
@@ -147,8 +133,6 @@ class TextObject extends BoardObject {
     'id': id,
     'x': x,
     'y': y,
-    'width': width,
-    'height': height,
     'rotation': rotation,
     'zIndex': zIndex,
     'text': text,
@@ -160,8 +144,6 @@ class TextObject extends BoardObject {
     id: json['id'],
     x: json['x'],
     y: json['y'],
-    width: json['width'],
-    height: json['height'],
     rotation: json['rotation'] ?? 0.0,
     zIndex: json['zIndex'] ?? 0,
     text: json['text'],
@@ -170,13 +152,11 @@ class TextObject extends BoardObject {
   );
 
   @override
-  TextObject copyWith({double? x, double? y, double? width, double? height, double? rotation, int? zIndex, String? text, int? color, double? fontSize}) {
+  TextObject copyWith({double? x, double? y, double? rotation, int? zIndex, String? text, int? color, double? fontSize}) {
     return TextObject(
       id: id,
       x: x ?? this.x,
       y: y ?? this.y,
-      width: width ?? this.width,
-      height: height ?? this.height,
       rotation: rotation ?? this.rotation,
       zIndex: zIndex ?? this.zIndex,
       text: text ?? this.text,

@@ -63,7 +63,7 @@ class WhiteboardState {
 
 class WhiteboardNotifier extends Notifier<WhiteboardState> {
   @override
-  WhiteboardState build() => WhiteboardState(whiteboard: Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', cells: {}));
+  WhiteboardState build() => WhiteboardState(whiteboard: Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', objects: []));
   
   void _saveMemento() {
     state = state.copyWith(
@@ -108,46 +108,26 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(selectedObjectIds: newSet);
   }
 
-  void addObject(String cellKey, BoardObject obj) {
+  void addObject(BoardObject obj) {
     _saveMemento();
-    final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
-    cells[cellKey] = [...(cells[cellKey] ?? []), obj];
-    state = state.copyWith(whiteboard: state.whiteboard.copyWith(cells: cells));
+    state = state.copyWith(whiteboard: state.whiteboard.copyWith(objects: [...state.whiteboard.objects, obj]));
   }
 
   void removeObject(String id) {
     _saveMemento();
-    final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
-    bool changed = false;
-    for (final key in cells.keys.toList()) {
-      final originalCount = cells[key]!.length;
-      cells[key] = cells[key]!.where((o) => o.id != id).toList();
-      if (cells[key]!.length != originalCount) changed = true;
-      if (cells[key]!.isEmpty) cells.remove(key);
-    }
-    if (changed) {
-      state = state.copyWith(
-        whiteboard: state.whiteboard.copyWith(cells: cells),
-        selectedObjectIds: state.selectedObjectIds.where((sid) => sid != id).toSet(),
-      );
-    }
+    final newObjects = state.whiteboard.objects.where((o) => o.id != id).toList();
+    state = state.copyWith(
+      whiteboard: state.whiteboard.copyWith(objects: newObjects),
+      selectedObjectIds: state.selectedObjectIds.where((sid) => sid != id).toSet(),
+    );
   }
 
   void removeSelected() {
     if (state.selectedObjectIds.isEmpty) return;
     _saveMemento();
-    final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
     final idsToRemove = state.selectedObjectIds;
-
-    for (final key in cells.keys.toList()) {
-      cells[key] = cells[key]!.where((o) => !idsToRemove.contains(o.id)).toList();
-      if (cells[key]!.isEmpty) cells.remove(key);
-    }
-
-    state = state.copyWith(
-      whiteboard: state.whiteboard.copyWith(cells: cells),
-      selectedObjectIds: {},
-    );
+    final newObjects = state.whiteboard.objects.where((o) => !idsToRemove.contains(o.id)).toList();
+    state = state.copyWith(whiteboard: state.whiteboard.copyWith(objects: newObjects), selectedObjectIds: {});
   }
 
   void markAsSaved() => state = state.copyWith(hasBeenSaved: true);
@@ -226,7 +206,7 @@ class MenuPage extends ConsumerWidget {
               children: [
                 ElevatedButton.icon(
                   onPressed: () {
-                    ref.read(whiteboardProvider.notifier).setWhiteboard(Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', cells: {}), isSaved: false);
+                    ref.read(whiteboardProvider.notifier).setWhiteboard(Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', objects: []), isSaved: false);
                     Navigator.push(context, MaterialPageRoute(builder: (c) => const WhiteboardPage()));
                   },
                   icon: const Icon(Icons.add), label: const Text('New Board'),
@@ -248,7 +228,7 @@ class MenuPage extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const Text('v0.2.1', style: TextStyle(color: Colors.grey)),
+                const Text('v0.3.0', style: TextStyle(color: Colors.grey)),
               ],
             ),
           ),
@@ -307,7 +287,11 @@ class WhiteboardCanvas extends ConsumerStatefulWidget {
 class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   List<Offset> _currentPoints = [];
   bool _isDrawing = false;
-  static const double cellSize = 1000.0;
+
+  Offset _snap(Offset p) {
+    // Snap to nearest 0.1 for precision and anti-aliasing stability
+    return Offset((p.dx * 10).roundToDouble() / 10, (p.dy * 10).roundToDouble() / 10);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -321,12 +305,17 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
             if (tool.type == ToolType.pen) {
               setState(() {
                 _isDrawing = true;
-                _currentPoints = [d.localPosition];
+                _currentPoints = [_snap(d.localPosition)];
               });
             }
           },
           onPanUpdate: (d) {
-            if (_isDrawing) setState(() { _currentPoints.add(d.localPosition); });
+            if (_isDrawing) {
+              final snapped = _snap(d.localPosition);
+              if ((snapped - _currentPoints.last).distance > 0.5) {
+                setState(() { _currentPoints.add(snapped); });
+              }
+            }
           },
           onPanEnd: (d) {
             if (_isDrawing) {
@@ -348,7 +337,6 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 isDrawing: _isDrawing,
                 toolColor: tool.color,
                 toolStrokeWidth: tool.strokeWidth,
-                cellSize: cellSize,
               ),
             ),
           ),
@@ -360,29 +348,16 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   void _finishDrawing() {
     if (_currentPoints.length < 2) return;
     final tool = ref.read(toolProvider);
-    final start = _currentPoints.first;
-    final cx = (start.dx / cellSize).floor();
-    final cy = (start.dy / cellSize).floor();
-    final cellKey = "$cx $cy";
-    final origin = Offset(cx * cellSize, cy * cellSize);
     
-    double minX = _currentPoints.map((p) => p.dx).reduce(min);
-    double maxX = _currentPoints.map((p) => p.dx).reduce(max);
-    double minY = _currentPoints.map((p) => p.dy).reduce(min);
-    double maxY = _currentPoints.map((p) => p.dy).reduce(max);
-    final padding = tool.strokeWidth * 1.5;
-
     final drawing = DrawingObject(
       id: const Uuid().v4(),
-      x: minX - origin.dx - padding,
-      y: minY - origin.dy - padding,
-      width: maxX - minX + padding * 2,
-      height: maxY - minY + padding * 2,
-      points: _currentPoints.map((p) => Offset(p.dx - minX + padding, p.dy - minY + padding)).toList(),
+      x: 0,
+      y: 0,
+      points: List.from(_currentPoints),
       color: tool.color.toARGB32(),
       strokeWidth: tool.strokeWidth,
     );
-    ref.read(whiteboardProvider.notifier).addObject(cellKey, drawing);
+    ref.read(whiteboardProvider.notifier).addObject(drawing);
   }
 }
 
@@ -392,7 +367,6 @@ class BoardPainter extends CustomPainter {
   final bool isDrawing;
   final Color toolColor;
   final double toolStrokeWidth;
-  final double cellSize;
 
   BoardPainter({
     required this.whiteboard,
@@ -400,80 +374,50 @@ class BoardPainter extends CustomPainter {
     required this.isDrawing,
     required this.toolColor,
     required this.toolStrokeWidth,
-    required this.cellSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Force clear the canvas buffer to prevent "ghost" data/artifacts
+    // 1. Clean the buffer with a solid white background
     canvas.drawColor(Colors.white, BlendMode.src);
 
-    // 2. Draw all saved objects using absolute coordinates
-    for (final entry in whiteboard.cells.entries) {
-      final key = entry.key;
-      final coords = key.split(' ');
-      final cellOrigin = Offset(
-        double.parse(coords[0]) * cellSize,
-        double.parse(coords[1]) * cellSize,
-      );
-
-      for (final obj in entry.value) {
-        final absPos = cellOrigin + Offset(obj.x, obj.y);
-        
-        if (obj is DrawingObject) {
-          _drawDrawing(canvas, obj, absPos);
-        } else if (obj is TextObject) {
-          _drawText(canvas, obj, absPos);
-        }
-      }
-    }
-
-    // 3. Draw current active stroke
-    if (isDrawing && currentPoints.length >= 2) {
-      final paint = Paint()
-        ..color = toolColor
-        ..strokeWidth = toolStrokeWidth
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke
-        ..isAntiAlias = true;
-
-      final path = Path()..moveTo(currentPoints.first.dx, currentPoints.first.dy);
-      for (var p in currentPoints.skip(1)) {
-        path.lineTo(p.dx, p.dy);
-      }
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  void _drawDrawing(Canvas canvas, DrawingObject obj, Offset absPos) {
-    if (obj.points.isEmpty) return;
     final paint = Paint()
-      ..color = Color(obj.color)
-      ..strokeWidth = obj.strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
-    final path = Path();
-    path.moveTo(absPos.dx + obj.points.first.dx, absPos.dy + obj.points.first.dy);
-    for (var p in obj.points.skip(1)) {
-      path.lineTo(absPos.dx + p.dx, absPos.dy + p.dy);
+    // 2. Draw saved objects
+    for (final obj in whiteboard.objects) {
+      if (obj is DrawingObject) {
+        paint.color = Color(obj.color);
+        paint.strokeWidth = obj.strokeWidth;
+        final path = Path();
+        path.moveTo(obj.points.first.dx, obj.points.first.dy);
+        for (int i = 1; i < obj.points.length; i++) {
+          path.lineTo(obj.points[i].dx, obj.points[i].dy);
+        }
+        canvas.drawPath(path, paint);
+      } else if (obj is TextObject) {
+        final textPainter = TextPainter(
+          text: TextSpan(text: obj.text, style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize)),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(canvas, Offset(obj.x, obj.y));
+      }
     }
-    canvas.drawPath(path, paint);
-  }
 
-  void _drawText(Canvas canvas, TextObject obj, Offset absPos) {
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: obj.text,
-        style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, absPos);
+    // 3. Draw active stroke
+    if (isDrawing && currentPoints.length >= 2) {
+      paint.color = toolColor;
+      paint.strokeWidth = toolStrokeWidth;
+      final path = Path()..moveTo(currentPoints.first.dx, currentPoints.first.dy);
+      for (int i = 1; i < currentPoints.length; i++) {
+        path.lineTo(currentPoints[i].dx, currentPoints[i].dy);
+      }
+      canvas.drawPath(path, paint);
+    }
   }
 
   @override
@@ -536,31 +480,4 @@ class WhiteboardToolbar extends ConsumerWidget {
       ref.read(whiteboardProvider.notifier).markAsSaved();
     }
   }
-}
-
-class FreehandPainter extends CustomPainter {
-  final List<Offset> points; final Color color; final double strokeWidth;
-  FreehandPainter(this.points, this.color, this.strokeWidth);
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
-    final paint = Paint()..color = color..strokeWidth = strokeWidth..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var p in points.skip(1)) path.lineTo(p.dx, p.dy);
-    canvas.drawPath(path, paint);
-  }
-  @override bool shouldRepaint(covariant FreehandPainter old) => true;
-}
-
-class DrawingPainter extends CustomPainter {
-  final DrawingObject drawing;
-  DrawingPainter(this.drawing);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Color(drawing.color)..strokeWidth = drawing.strokeWidth..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
-    final path = Path()..moveTo(drawing.points.first.dx, drawing.points.first.dy);
-    for (var p in drawing.points.skip(1)) path.lineTo(p.dx, p.dy);
-    canvas.drawPath(path, paint);
-  }
-  @override bool shouldRepaint(covariant DrawingPainter old) => old.drawing != drawing;
 }
