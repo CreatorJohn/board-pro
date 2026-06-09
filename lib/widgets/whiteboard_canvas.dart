@@ -402,8 +402,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                    isEraser) && !_isDrawing && !_isLineDrawing;
 
     final matrix = transformationController.value;
-    final topLeft = _toGlobal(Offset.zero, matrix);
-    final bottomRight = _toGlobal(Offset(screenSize.width, screenSize.height), matrix);
+    final topLeft = _getBoardPos(Offset.zero);
+    final bottomRight = _getBoardPos(Offset(screenSize.width, screenSize.height));
     final viewport = Rect.fromPoints(topLeft, bottomRight).inflate(100);
 
     final minCx = (viewport.left / cellSize).floor();
