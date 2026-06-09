@@ -40,9 +40,10 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     super.initState();
   }
 
-  Offset _toGlobal(Offset local, Matrix4 transform) {
-    final inv = Matrix4.inverted(transform);
-    return MatrixUtils.transformPoint(inv, local);
+  Offset _getBoardPos(Offset screenPos) {
+    final matrix = ref.read(transformationControllerProvider).value;
+    final inv = Matrix4.inverted(matrix);
+    return MatrixUtils.transformPoint(inv, screenPos);
   }
 
   String _getCellKey(Offset globalPos) {
@@ -52,9 +53,11 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   }
 
   void _onPointerDown(PointerDownEvent event, ToolState tool) {
-    final globalPos = event.localPosition;
+    final screenPos = event.localPosition;
+    final boardPos = _getBoardPos(screenPos);
+    
     setState(() {
-      _globalCursorPos = globalPos;
+      _globalCursorPos = boardPos;
       if (event.kind == PointerDeviceKind.stylus) {
         _isStylusActive = true;
       }
@@ -65,15 +68,15 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
 
     if (tool.toolType == ToolType.select) {
       // Check if we hit an object to select it
-      final hitObjId = _hitTest(globalPos);
+      final hitObjId = _hitTest(boardPos);
       if (hitObjId != null) {
         final multi = HardwareKeyboard.instance.isShiftPressed;
         ref.read(whiteboardProvider.notifier).selectObject(hitObjId, multi: multi);
       } else {
         setState(() {
           _isSelecting = true;
-          _selectionStart = globalPos;
-          _selectionEnd = globalPos;
+          _selectionStart = boardPos;
+          _selectionEnd = boardPos;
         });
         ref.read(whiteboardProvider.notifier).selectObject(null);
       }
@@ -82,7 +85,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         setState(() {
           _isDrawing = true;
           _isActionInProgress = true;
-          _currentPoints = [globalPos];
+          _currentPoints = [boardPos];
         });
       } else if (isTouchOrMouse && _isStylusActive) {
         _panStartPos = event.position;
@@ -92,13 +95,13 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     } else if (tool.toolType == ToolType.line) {
       setState(() {
         _isLineDrawing = true;
-        _lineStart = globalPos;
-        _lineEnd = globalPos;
+        _lineStart = boardPos;
+        _lineEnd = boardPos;
       });
     } else if (tool.toolType == ToolType.objectEraser || tool.toolType == ToolType.pointEraser) {
       if (isStylus || (isTouchOrMouse && !_isStylusActive)) {
         setState(() => _isActionInProgress = true);
-        _handleEraser(globalPos, tool);
+        _handleEraser(boardPos, tool);
       } else if (isTouchOrMouse && _isStylusActive) {
         _panStartPos = event.position;
         _isManualPanning = false;
@@ -139,19 +142,21 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   }
 
   void _onPointerMove(PointerMoveEvent event, ToolState tool, TransformationController controller) {
-    final globalPos = event.localPosition;
+    final screenPos = event.localPosition;
+    final boardPos = _getBoardPos(screenPos);
+    
     setState(() {
-      _globalCursorPos = globalPos;
+      _globalCursorPos = boardPos;
     });
     
     if (_isDrawing) {
       setState(() {
-        _currentPoints = [..._currentPoints, globalPos];
+        _currentPoints = [..._currentPoints, boardPos];
       });
     } else if (_isLineDrawing) {
-      setState(() => _lineEnd = globalPos);
+      setState(() => _lineEnd = boardPos);
     } else if (_isSelecting) {
-      setState(() => _selectionEnd = globalPos);
+      setState(() => _selectionEnd = boardPos);
     } else if (_isActionInProgress && !_isDrawing) {
       final isEraser = tool.toolType == ToolType.objectEraser || tool.toolType == ToolType.pointEraser;
       final isTouchOrMouse = event.kind == PointerDeviceKind.touch || event.kind == PointerDeviceKind.mouse;
@@ -174,7 +179,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           setState(() {}); 
         }
       } else if (isEraser) {
-        _handleEraser(globalPos, tool);
+        _handleEraser(boardPos, tool);
       }
     }
   }
@@ -424,105 +429,120 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
     }
     allSortedObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
 
-    return InteractiveViewer(
-      transformationController: transformationController,
-      constrained: false,
-      boundaryMargin: const EdgeInsets.all(double.infinity),
-      minScale: 0.1,
-      maxScale: 5.0,
-      panEnabled: canPan,
-      scaleEnabled: true,
-      onInteractionUpdate: (_) => setState(() {}),
-      child: Listener(
-        onPointerDown: (event) => _onPointerDown(event, toolState),
-        onPointerMove: (event) => _onPointerMove(event, toolState, transformationController),
-        onPointerUp: (event) => _onPointerUp(event, toolState),
-        onPointerCancel: (event) => _onPointerCancel(event, toolState),
-        child: Container(
-          color: Colors.white,
-          width: screenSize.width,
-          height: screenSize.height,
-          child: Stack(
-            children: [
-              // 1. Static Layer (Everything is drawn via CustomPainter now)
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: GlobalBoardPainter(
-                    sortedObjects: allSortedObjects,
-                  ),
-                ),
-              ),
-
-              // 2. Selection Overlays (Simple border boxes for moving objects)
-              ...allSortedObjects.where((item) => selectedIds.contains(item.obj.id)).map((item) {
-                final obj = item.obj;
-                final origin = item.origin;
-                
-                return Positioned(
-                  left: origin.dx + obj.x,
-                  top: origin.dy + obj.y,
-                  width: obj.width,
-                  height: obj.height,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (details) {
-                      // Scale the drag delta down so dragging is consistent at high zoom
-                      final scaledDelta = details.delta / transformationController.value.getMaxScaleOnAxis();
-                      ref.read(whiteboardProvider.notifier).moveSelected(scaledDelta);
-                    },
-                    onPanEnd: (_) => ref.read(whiteboardProvider.notifier).endAction(),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blueAccent, width: 2),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-
-              // 3. Temporary Painters (While drawing)
-              if (_currentPoints.isNotEmpty)
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _GlobalDrawingPainter(_currentPoints, toolState.color, toolState.strokeWidth),
-                  ),
-                ),
-              if (_isLineDrawing && _lineStart != null && _lineEnd != null)
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _TempLinePainter(_lineStart!, _lineEnd!, toolState.color, toolState.strokeWidth),
-                  ),
-                ),
-              if (_isSelecting && _selectionStart != null && _selectionEnd != null)
-                Positioned.fromRect(
-                  rect: Rect.fromPoints(_selectionStart!, _selectionEnd!),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      border: Border.all(color: Colors.blue),
-                    ),
-                  ),
-                ),
-              if (isEraser && _globalCursorPos != null)
-                Positioned(
-                  left: _globalCursorPos!.dx - toolState.eraserSize,
-                  top: _globalCursorPos!.dy - toolState.eraserSize,
-                  child: IgnorePointer(
-                    child: Container(
-                      width: toolState.eraserSize * 2,
-                      height: toolState.eraserSize * 2,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.black26),
-                        color: Colors.black.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+    return Stack(
+      children: [
+        // 1. Static Layer (Everything is drawn via CustomPainter now)
+        Positioned.fill(
+          child: CustomPaint(
+            painter: GlobalBoardPainter(
+              sortedObjects: allSortedObjects,
+              matrix: matrix,
+            ),
           ),
         ),
-      ),
+
+        // 2. Selection Overlays (Simple border boxes for moving objects)
+        ...allSortedObjects.where((item) => selectedIds.contains(item.obj.id)).map((item) {
+          final obj = item.obj;
+          final origin = item.origin;
+          final scale = matrix.getMaxScaleOnAxis();
+          final screenTopLeft = MatrixUtils.transformPoint(matrix, Offset(origin.dx + obj.x, origin.dy + obj.y));
+          
+          return Positioned(
+            left: screenTopLeft.dx,
+            top: screenTopLeft.dy,
+            width: obj.width * scale,
+            height: obj.height * scale,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: (details) {
+                // Scale the drag delta down so dragging is consistent at high zoom
+                final scaledDelta = details.delta / scale;
+                ref.read(whiteboardProvider.notifier).moveSelected(scaledDelta);
+              },
+              onPanEnd: (_) => ref.read(whiteboardProvider.notifier).endAction(),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.blueAccent, width: 2),
+                ),
+              ),
+            ),
+          );
+        }),
+
+        // 3. Temporary Painters (While drawing)
+        if (_currentPoints.isNotEmpty)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _GlobalDrawingPainter(_currentPoints, toolState.color, toolState.strokeWidth, matrix),
+            ),
+          ),
+        if (_isLineDrawing && _lineStart != null && _lineEnd != null)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _TempLinePainter(_lineStart!, _lineEnd!, toolState.color, toolState.strokeWidth, matrix),
+            ),
+          ),
+        if (_isSelecting && _selectionStart != null && _selectionEnd != null)
+          Builder(
+            builder: (context) {
+              final screenStart = MatrixUtils.transformPoint(matrix, _selectionStart!);
+              final screenEnd = MatrixUtils.transformPoint(matrix, _selectionEnd!);
+              return Positioned.fromRect(
+                rect: Rect.fromPoints(screenStart, screenEnd),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.blue),
+                  ),
+                ),
+              );
+            }
+          ),
+        if (isEraser && _globalCursorPos != null)
+          Builder(
+            builder: (context) {
+              final screenPos = MatrixUtils.transformPoint(matrix, _globalCursorPos!);
+              final scaledSize = toolState.eraserSize * matrix.getMaxScaleOnAxis();
+              return Positioned(
+                left: screenPos.dx - scaledSize,
+                top: screenPos.dy - scaledSize,
+                child: IgnorePointer(
+                  child: Container(
+                    width: scaledSize * 2,
+                    height: scaledSize * 2,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.black26),
+                      color: Colors.black.withValues(alpha: 0.05),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              );
+            }
+          ),
+
+        // 4. Interaction Layer (Invisible, handles panning and zooming physics)
+        Positioned.fill(
+          child: Listener(
+            onPointerDown: (event) => _onPointerDown(event, toolState),
+            onPointerMove: (event) => _onPointerMove(event, toolState, transformationController),
+            onPointerUp: (event) => _onPointerUp(event, toolState),
+            onPointerCancel: (event) => _onPointerCancel(event, toolState),
+            child: InteractiveViewer(
+              transformationController: transformationController,
+              constrained: false,
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              minScale: 0.1,
+              maxScale: 5.0,
+              panEnabled: canPan,
+              scaleEnabled: true,
+              onInteractionUpdate: (_) => setState(() {}),
+              child: const SizedBox(width: 1000000, height: 1000000), // Pure geometry for hit area
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -531,10 +551,14 @@ class _GlobalDrawingPainter extends CustomPainter {
   final List<Offset> points;
   final Color color;
   final double strokeWidth;
-  _GlobalDrawingPainter(this.points, this.color, this.strokeWidth);
+  final Matrix4 matrix;
+  _GlobalDrawingPainter(this.points, this.color, this.strokeWidth, this.matrix);
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
+    canvas.save();
+    canvas.transform(matrix.storage);
+    
     final paint = Paint()..color = color..strokeWidth = strokeWidth..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke;
     final path = Path();
     path.moveTo(points.first.dx, points.first.dy);
@@ -542,6 +566,8 @@ class _GlobalDrawingPainter extends CustomPainter {
       path.lineTo(points[i].dx, points[i].dy);
     }
     canvas.drawPath(path, paint);
+    
+    canvas.restore();
   }
   @override
   bool shouldRepaint(covariant _GlobalDrawingPainter oldDelegate) => true;
@@ -552,9 +578,13 @@ class _TempLinePainter extends CustomPainter {
   final Offset end;
   final Color color;
   final double strokeWidth;
-  _TempLinePainter(this.start, this.end, this.color, this.strokeWidth);
+  final Matrix4 matrix;
+  _TempLinePainter(this.start, this.end, this.color, this.strokeWidth, this.matrix);
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.transform(matrix.storage);
+
     final paint = Paint()..color = color..strokeWidth = strokeWidth..strokeCap = StrokeCap.round;
     canvas.drawLine(start, end, paint);
     // Draw simple arrow head
@@ -565,6 +595,8 @@ class _TempLinePainter extends CustomPainter {
     canvas.rotate(angle);
     final arrowPath = Path()..moveTo(0, 0)..lineTo(-arrowSize, -arrowSize / 2)..lineTo(-arrowSize, arrowSize / 2)..close();
     canvas.drawPath(arrowPath, Paint()..color = color);
+    canvas.restore();
+    
     canvas.restore();
   }
   @override

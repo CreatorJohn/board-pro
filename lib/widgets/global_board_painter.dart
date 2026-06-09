@@ -4,13 +4,18 @@ import '../models/board_objects.dart';
 
 class GlobalBoardPainter extends CustomPainter {
   final List<({Offset origin, BoardObject obj})> sortedObjects;
+  final Matrix4 matrix;
 
   GlobalBoardPainter({
     required this.sortedObjects,
+    required this.matrix,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.transform(matrix.storage);
+
     for (final item in sortedObjects) {
       final obj = item.obj;
       final cellOrigin = item.origin;
@@ -27,6 +32,8 @@ class GlobalBoardPainter extends CustomPainter {
       _drawObject(canvas, obj);
       canvas.restore();
     }
+    
+    canvas.restore();
   }
 
   void _drawObject(Canvas canvas, BoardObject obj) {
@@ -120,6 +127,6 @@ class GlobalBoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GlobalBoardPainter oldDelegate) {
-    return oldDelegate.sortedObjects != sortedObjects;
+    return oldDelegate.sortedObjects != sortedObjects || oldDelegate.matrix != matrix;
   }
 }
