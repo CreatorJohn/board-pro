@@ -10,7 +10,6 @@ import '../providers/tool_provider.dart';
 import '../providers/canvas_provider.dart';
 import 'object_wrapper.dart';
 import 'drawing_painter.dart';
-import 'grid_painter.dart';
 import 'cell_painter.dart';
 
 class WhiteboardCanvas extends ConsumerStatefulWidget {
@@ -429,11 +428,6 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           height: virtualSize,
           child: Stack(
             children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: GridPainter(cellSize: 50.0, viewport: viewport),
-                ),
-              ),
               ...whiteboardState.whiteboard.cells.entries.where((entry) {
                 final coords = entry.key.split(' ');
                 final cx = int.parse(coords[0]);
