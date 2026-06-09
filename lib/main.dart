@@ -136,39 +136,17 @@ class MenuPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _createNewBoard(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
-    final title = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Whiteboard'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Enter board title'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
+  void _createNewBoard(BuildContext context, WidgetRef ref) {
+    final newBoard = Whiteboard(
+      id: const Uuid().v4(),
+      title: 'Untitled Board',
+      cells: {},
     );
-
-    if (title != null && title.isNotEmpty) {
-      final newBoard = Whiteboard(
-        id: const Uuid().v4(),
-        title: title,
-        cells: {},
-      );
-      ref.read(whiteboardProvider.notifier).setWhiteboard(newBoard);
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const WhiteboardPage()),
-      );
-    }
+    ref.read(whiteboardProvider.notifier).setWhiteboard(newBoard, isSaved: false);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const WhiteboardPage()),
+    );
   }
 
   Future<void> _openBoard(BuildContext context, WidgetRef ref, String title) async {

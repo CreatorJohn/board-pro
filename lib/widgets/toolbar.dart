@@ -375,10 +375,11 @@ class FileSubPanel extends ConsumerWidget {
                 // If title changed, rename the file (which handles deletion of old one)
                 await ref.read(storageProvider.notifier).renameBoard(oldTitle, newTitle);
                 final updatedBoard = board.copyWith(title: newTitle);
-                ref.read(whiteboardProvider.notifier).setWhiteboard(updatedBoard);
+                ref.read(whiteboardProvider.notifier).setWhiteboard(updatedBoard, isSaved: true);
               } else {
                 // Same title, just save
                 await ref.read(storageProvider.notifier).saveBoard(board);
+                ref.read(whiteboardProvider.notifier).markAsSaved();
               }
               
               if (context.mounted) {

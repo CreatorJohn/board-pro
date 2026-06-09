@@ -8,12 +8,14 @@ class WhiteboardState {
   final Set<String> selectedObjectIds;
   final List<Whiteboard> undoHistory;
   final List<Whiteboard> redoHistory;
+  final bool hasBeenSaved;
 
   WhiteboardState({
     required this.whiteboard,
     this.selectedObjectIds = const {},
     this.undoHistory = const [],
     this.redoHistory = const [],
+    this.hasBeenSaved = false,
   });
 
   WhiteboardState copyWith({
@@ -22,12 +24,14 @@ class WhiteboardState {
     bool clearSelection = false,
     List<Whiteboard>? undoHistory,
     List<Whiteboard>? redoHistory,
+    bool? hasBeenSaved,
   }) =>
       WhiteboardState(
         whiteboard: whiteboard ?? this.whiteboard,
         selectedObjectIds: clearSelection ? const {} : (selectedObjectIds ?? this.selectedObjectIds),
         undoHistory: undoHistory ?? this.undoHistory,
         redoHistory: redoHistory ?? this.redoHistory,
+        hasBeenSaved: hasBeenSaved ?? this.hasBeenSaved,
       );
 }
 
@@ -319,8 +323,18 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(selectedObjectIds: ids);
   }
 
-  void setWhiteboard(Whiteboard board) {
-    state = state.copyWith(whiteboard: board, undoHistory: [], redoHistory: [], clearSelection: true);
+  void setWhiteboard(Whiteboard board, {bool isSaved = true}) {
+    state = state.copyWith(
+      whiteboard: board,
+      undoHistory: [],
+      redoHistory: [],
+      clearSelection: true,
+      hasBeenSaved: isSaved,
+    );
+  }
+
+  void markAsSaved() {
+    state = state.copyWith(hasBeenSaved: true);
   }
 
   void clearBoard() {
@@ -328,6 +342,7 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(
       whiteboard: Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', cells: {}),
       clearSelection: true,
+      hasBeenSaved: false,
     );
   }
 }
