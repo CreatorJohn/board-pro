@@ -405,7 +405,10 @@ class BoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Draw all saved objects
+    // 1. Force clear the canvas buffer to prevent "ghost" data/artifacts
+    canvas.drawColor(Colors.white, BlendMode.src);
+
+    // 2. Draw all saved objects using absolute coordinates
     for (final entry in whiteboard.cells.entries) {
       final key = entry.key;
       final coords = key.split(' ');
@@ -415,27 +418,25 @@ class BoardPainter extends CustomPainter {
       );
 
       for (final obj in entry.value) {
-        canvas.save();
-        canvas.translate(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y);
+        final absPos = cellOrigin + Offset(obj.x, obj.y);
         
         if (obj is DrawingObject) {
-          _drawDrawing(canvas, obj);
+          _drawDrawing(canvas, obj, absPos);
         } else if (obj is TextObject) {
-          _drawText(canvas, obj);
+          _drawText(canvas, obj, absPos);
         }
-        
-        canvas.restore();
       }
     }
 
-    // 2. Draw current active stroke
+    // 3. Draw current active stroke
     if (isDrawing && currentPoints.length >= 2) {
       final paint = Paint()
         ..color = toolColor
         ..strokeWidth = toolStrokeWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
+        ..style = PaintingStyle.stroke
+        ..isAntiAlias = true;
 
       final path = Path()..moveTo(currentPoints.first.dx, currentPoints.first.dy);
       for (var p in currentPoints.skip(1)) {
@@ -445,23 +446,25 @@ class BoardPainter extends CustomPainter {
     }
   }
 
-  void _drawDrawing(Canvas canvas, DrawingObject obj) {
+  void _drawDrawing(Canvas canvas, DrawingObject obj, Offset absPos) {
     if (obj.points.isEmpty) return;
     final paint = Paint()
       ..color = Color(obj.color)
       ..strokeWidth = obj.strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
 
-    final path = Path()..moveTo(obj.points.first.dx, obj.points.first.dy);
+    final path = Path();
+    path.moveTo(absPos.dx + obj.points.first.dx, absPos.dy + obj.points.first.dy);
     for (var p in obj.points.skip(1)) {
-      path.lineTo(p.dx, p.dy);
+      path.lineTo(absPos.dx + p.dx, absPos.dy + p.dy);
     }
     canvas.drawPath(path, paint);
   }
 
-  void _drawText(Canvas canvas, TextObject obj) {
+  void _drawText(Canvas canvas, TextObject obj, Offset absPos) {
     final textPainter = TextPainter(
       text: TextSpan(
         text: obj.text,
@@ -470,7 +473,7 @@ class BoardPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    textPainter.paint(canvas, Offset.zero);
+    textPainter.paint(canvas, absPos);
   }
 
   @override
