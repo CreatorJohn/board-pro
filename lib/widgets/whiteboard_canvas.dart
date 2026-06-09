@@ -308,36 +308,44 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   }
 
   void _finishDrawing(ToolState tool) {
-    if (_currentPoints.isEmpty) return;
-    final cellPoints = <String, List<Offset>>{};
-    for (final p in _currentPoints) {
-      final key = _getCellKey(p);
-      cellPoints.putIfAbsent(key, () => []).add(p);
+    if (_currentPoints.length < 2) {
+      setState(() {
+        _currentPoints = [];
+        _isDrawing = false;
+      });
+      return;
     }
-    for (final entry in cellPoints.entries) {
-      final cellKey = entry.key;
-      final points = entry.value;
-      if (points.length < 2) continue;
-      final coords = cellKey.split(' ');
-      final cellGlobalOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
-      double minX = points.map((p) => p.dx).reduce(min);
-      double maxX = points.map((p) => p.dx).reduce(max);
-      double minY = points.map((p) => p.dy).reduce(min);
-      double maxY = points.map((p) => p.dy).reduce(max);
-      final normalizedPoints = points.map((p) => Offset(p.dx - minX, p.dy - minY)).toList();
-      final drawing = DrawingObject(
-        id: const Uuid().v4(),
-        x: minX - cellGlobalOrigin.dx,
-        y: minY - cellGlobalOrigin.dy,
-        width: (maxX - minX).clamp(1.0, 50000.0),
-        height: (maxY - minY).clamp(1.0, 50000.0),
-        zIndex: 0,
-        points: normalizedPoints,
-        color: tool.color.toARGB32(),
-        strokeWidth: tool.strokeWidth,
-      );
-      ref.read(whiteboardProvider.notifier).addObject(cellKey, drawing);
-    }
+
+    // Use the starting point to determine the "home" cell
+    final startPoint = _currentPoints.first;
+    final cellKey = _getCellKey(startPoint);
+    final coords = cellKey.split(' ');
+    final cellGlobalOrigin = Offset(int.parse(coords[0]) * cellSize, int.parse(coords[1]) * cellSize);
+
+    // Calculate bounding box of the entire stroke
+    double minX = _currentPoints.map((p) => p.dx).reduce(min);
+    double maxX = _currentPoints.map((p) => p.dx).reduce(max);
+    double minY = _currentPoints.map((p) => p.dy).reduce(min);
+    double maxY = _currentPoints.map((p) => p.dy).reduce(max);
+
+    // Normalize points relative to the minX/minY of the bounding box
+    final normalizedPoints = _currentPoints.map((p) => Offset(p.dx - minX, p.dy - minY)).toList();
+
+    final drawing = DrawingObject(
+      id: const Uuid().v4(),
+      // Position relative to the cell origin
+      x: minX - cellGlobalOrigin.dx,
+      y: minY - cellGlobalOrigin.dy,
+      width: (maxX - minX).clamp(1.0, 50000.0),
+      height: (maxY - minY).clamp(1.0, 50000.0),
+      zIndex: 0,
+      points: normalizedPoints,
+      color: tool.color.toARGB32(),
+      strokeWidth: tool.strokeWidth,
+    );
+
+    ref.read(whiteboardProvider.notifier).addObject(cellKey, drawing);
+
     setState(() {
       _currentPoints = [];
       _isDrawing = false;
