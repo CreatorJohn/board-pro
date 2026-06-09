@@ -398,27 +398,29 @@ class WhiteboardToolbar extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _toolBtn(ref, ToolType.pen, Icons.edit, tool.type == ToolType.pen),
-            _toolBtn(ref, ToolType.eraser, Icons.auto_fix_high, tool.type == ToolType.eraser),
-            _toolBtn(ref, ToolType.text, Icons.text_fields, tool.type == ToolType.text),
-            _toolBtn(ref, ToolType.select, Icons.near_me, tool.type == ToolType.select),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
-            IconButton(
-              icon: const Icon(Icons.undo),
-              onPressed: wb.undoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).undo(),
-              tooltip: 'Undo (Ctrl+Z)',
-            ),
-            IconButton(
-              icon: const Icon(Icons.redo),
-              onPressed: wb.redoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).redo(),
-              tooltip: 'Redo (Ctrl+Y)',
-            ),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
-            IconButton(icon: const Icon(Icons.save), onPressed: () => _save(context, ref), tooltip: 'Save Board'),
-          ],
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _toolBtn(ref, ToolType.pen, Icons.edit, tool.type == ToolType.pen),
+              _toolBtn(ref, ToolType.eraser, Icons.auto_fix_high, tool.type == ToolType.eraser),
+              _toolBtn(ref, ToolType.text, Icons.text_fields, tool.type == ToolType.text),
+              _toolBtn(ref, ToolType.select, Icons.near_me, tool.type == ToolType.select),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
+              IconButton(
+                icon: const Icon(Icons.undo),
+                onPressed: wb.undoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).undo(),
+                tooltip: 'Undo (Ctrl+Z)',
+              ),
+              IconButton(
+                icon: const Icon(Icons.redo),
+                onPressed: wb.redoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).redo(),
+                tooltip: 'Redo (Ctrl+Y)',
+              ),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
+              IconButton(icon: const Icon(Icons.save), onPressed: () => _save(context, ref), tooltip: 'Save Board'),
+            ],
+          ),
         ),
       ),
     );
