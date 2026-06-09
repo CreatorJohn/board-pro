@@ -41,7 +41,7 @@ class GlobalBoardPainter extends CustomPainter {
 
     // Sort by createdAt (back to front)
     allObjects.sort((a, b) => a.obj.createdAt.compareTo(b.obj.createdAt));
-...
+
     for (final item in allObjects) {
       final obj = item.obj;
       final cellOrigin = item.origin;
