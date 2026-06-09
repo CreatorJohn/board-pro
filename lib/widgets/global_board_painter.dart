@@ -1,24 +1,43 @@
 import 'package:flutter/material.dart';
 import '../models/board_objects.dart';
 
-class CellPainter extends CustomPainter {
-  final List<BoardObject> objects;
+class GlobalBoardPainter extends CustomPainter {
+  final Map<String, List<BoardObject>> cells;
+  final Set<String> selectedIds;
+  final double cellSize;
 
-  CellPainter(this.objects);
+  GlobalBoardPainter({
+    required this.cells,
+    required this.selectedIds,
+    required this.cellSize,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final obj in objects) {
-      canvas.save();
-      canvas.translate(obj.x, obj.y);
-      if (obj.rotation != 0) {
-        canvas.translate(obj.width / 2, obj.height / 2);
-        canvas.rotate(obj.rotation);
-        canvas.translate(-obj.width / 2, -obj.height / 2);
+    for (final entry in cells.entries) {
+      final coords = entry.key.split(' ');
+      final cx = int.parse(coords[0]);
+      final cy = int.parse(coords[1]);
+      final cellOrigin = Offset(cx * cellSize, cy * cellSize);
+
+      for (final obj in entry.value) {
+        // Only draw objects that are NOT selected (selected objects are widgets)
+        // Also only bake bakeable types
+        if (selectedIds.contains(obj.id)) continue;
+        if (!(obj is DrawingObject || obj is LineObject)) continue;
+
+        canvas.save();
+        canvas.translate(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y);
+        
+        if (obj.rotation != 0) {
+          canvas.translate(obj.width / 2, obj.height / 2);
+          canvas.rotate(obj.rotation);
+          canvas.translate(-obj.width / 2, -obj.height / 2);
+        }
+
+        _drawObject(canvas, obj);
+        canvas.restore();
       }
-      
-      _drawObject(canvas, obj);
-      canvas.restore();
     }
   }
 
@@ -63,5 +82,7 @@ class CellPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CellPainter oldDelegate) => oldDelegate.objects != objects;
+  bool shouldRepaint(covariant GlobalBoardPainter oldDelegate) {
+    return oldDelegate.cells != cells || oldDelegate.selectedIds != selectedIds;
+  }
 }

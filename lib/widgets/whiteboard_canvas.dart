@@ -11,7 +11,7 @@ import '../providers/tool_provider.dart';
 import '../providers/canvas_provider.dart';
 import 'object_wrapper.dart';
 import 'drawing_painter.dart';
-import 'cell_painter.dart';
+import 'global_board_painter.dart';
 
 class WhiteboardCanvas extends ConsumerStatefulWidget {
   const WhiteboardCanvas({super.key});
@@ -429,6 +429,18 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           height: virtualSize,
           child: Stack(
             children: [
+              // 1. Static Baked Layer (Everything non-selected)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: GlobalBoardPainter(
+                    cells: whiteboardState.whiteboard.cells,
+                    selectedIds: selectedIds,
+                    cellSize: cellSize,
+                  ),
+                ),
+              ),
+
+              // 2. Active Widgets (Selected items + Non-bakeable items like Text/Images)
               ...whiteboardState.whiteboard.cells.entries.where((entry) {
                 final coords = entry.key.split(' ');
                 final cx = int.parse(coords[0]);
@@ -442,38 +454,30 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                 final allObjects = cellEntry.value;
                 bool isBakeable(BoardObject o) => o is DrawingObject || o is LineObject;
                 
-                final bakedObjects = allObjects.where((o) => !selectedIds.contains(o.id) && isBakeable(o)).toList();
                 final activeObjects = allObjects.where((o) => selectedIds.contains(o.id) || !isBakeable(o)).toList();
 
-                return [
-                  // The "Baked" layer for this cell
-                  if (bakedObjects.isNotEmpty)
-                    Positioned(
-                      left: cellGlobalOrigin.dx,
-                      top: cellGlobalOrigin.dy,
-                      child: CustomPaint(
-                        size: const Size(cellSize, cellSize),
-                        painter: CellPainter(bakedObjects),
-                      ),
-                    ),
-                  // The "Active" layer for selected objects
-                  ...activeObjects.map((obj) {
-                    return ObjectWrapper(
-                      key: ValueKey(obj.id),
-                      cellKey: cellKey,
-                      object: obj.copyWith(x: cellGlobalOrigin.dx + obj.x, y: cellGlobalOrigin.dy + obj.y),
-                      child: _buildObjectContent(obj),
-                    );
-                  }),
-                ];
+                return activeObjects.map((obj) {
+                  return ObjectWrapper(
+                    key: ValueKey(obj.id),
+                    cellKey: cellKey,
+                    object: obj.copyWith(x: cellGlobalOrigin.dx + obj.x, y: cellGlobalOrigin.dy + obj.y),
+                    child: _buildObjectContent(obj),
+                  );
+                });
               }),
+
+              // 3. Temporary Painters (While drawing)
               if (_currentPoints.isNotEmpty)
-                CustomPaint(
-                  painter: _GlobalDrawingPainter(_currentPoints, toolState.color, toolState.strokeWidth),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _GlobalDrawingPainter(_currentPoints, toolState.color, toolState.strokeWidth),
+                  ),
                 ),
               if (_isLineDrawing && _lineStart != null && _lineEnd != null)
-                CustomPaint(
-                  painter: _TempLinePainter(_lineStart!, _lineEnd!, toolState.color, toolState.strokeWidth),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _TempLinePainter(_lineStart!, _lineEnd!, toolState.color, toolState.strokeWidth),
+                  ),
                 ),
               if (_isSelecting && _selectionStart != null && _selectionEnd != null)
                 Positioned.fromRect(
