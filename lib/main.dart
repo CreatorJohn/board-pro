@@ -33,12 +33,30 @@ class WhiteboardState {
   final Whiteboard whiteboard;
   final Set<String> selectedObjectIds;
   final bool hasBeenSaved;
-  WhiteboardState({required this.whiteboard, this.selectedObjectIds = const {}, this.hasBeenSaved = false});
-  WhiteboardState copyWith({Whiteboard? whiteboard, Set<String>? selectedObjectIds, bool? hasBeenSaved}) {
+  final List<Whiteboard> undoStack;
+  final List<Whiteboard> redoStack;
+
+  WhiteboardState({
+    required this.whiteboard,
+    this.selectedObjectIds = const {},
+    this.hasBeenSaved = false,
+    this.undoStack = const [],
+    this.redoStack = const [],
+  });
+
+  WhiteboardState copyWith({
+    Whiteboard? whiteboard,
+    Set<String>? selectedObjectIds,
+    bool? hasBeenSaved,
+    List<Whiteboard>? undoStack,
+    List<Whiteboard>? redoStack,
+  }) {
     return WhiteboardState(
       whiteboard: whiteboard ?? this.whiteboard,
       selectedObjectIds: selectedObjectIds ?? this.selectedObjectIds,
       hasBeenSaved: hasBeenSaved ?? this.hasBeenSaved,
+      undoStack: undoStack ?? this.undoStack,
+      redoStack: redoStack ?? this.redoStack,
     );
   }
 }
@@ -47,7 +65,41 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
   @override
   WhiteboardState build() => WhiteboardState(whiteboard: Whiteboard(id: const Uuid().v4(), title: 'Untitled Board', cells: {}));
   
-  void setWhiteboard(Whiteboard board, {bool isSaved = true}) => state = state.copyWith(whiteboard: board, hasBeenSaved: isSaved, selectedObjectIds: {});
+  void _saveMemento() {
+    state = state.copyWith(
+      undoStack: [...state.undoStack, state.whiteboard],
+      redoStack: [],
+    );
+  }
+
+  void undo() {
+    if (state.undoStack.isEmpty) return;
+    final current = state.whiteboard;
+    final previous = state.undoStack.last;
+    state = state.copyWith(
+      whiteboard: previous,
+      undoStack: state.undoStack.sublist(0, state.undoStack.length - 1),
+      redoStack: [...state.redoStack, current],
+      selectedObjectIds: {},
+    );
+  }
+
+  void redo() {
+    if (state.redoStack.isEmpty) return;
+    final current = state.whiteboard;
+    final next = state.redoStack.last;
+    state = state.copyWith(
+      whiteboard: next,
+      undoStack: [...state.undoStack, current],
+      redoStack: state.redoStack.sublist(0, state.redoStack.length - 1),
+      selectedObjectIds: {},
+    );
+  }
+
+  void setWhiteboard(Whiteboard board, {bool isSaved = true}) {
+    state = WhiteboardState(whiteboard: board, hasBeenSaved: isSaved);
+  }
+
   void selectObject(String? id, {bool multi = false}) {
     if (id == null) { state = state.copyWith(selectedObjectIds: {}); return; }
     final newSet = Set<String>.from(state.selectedObjectIds);
@@ -55,23 +107,49 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     else { newSet.clear(); newSet.add(id); }
     state = state.copyWith(selectedObjectIds: newSet);
   }
+
   void addObject(String cellKey, BoardObject obj) {
+    _saveMemento();
     final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
     cells[cellKey] = [...(cells[cellKey] ?? []), obj];
     state = state.copyWith(whiteboard: state.whiteboard.copyWith(cells: cells));
   }
+
   void removeObject(String id) {
+    _saveMemento();
     final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
+    bool changed = false;
     for (final key in cells.keys.toList()) {
+      final originalCount = cells[key]!.length;
       cells[key] = cells[key]!.where((o) => o.id != id).toList();
+      if (cells[key]!.length != originalCount) changed = true;
       if (cells[key]!.isEmpty) cells.remove(key);
     }
-    state = state.copyWith(whiteboard: state.whiteboard.copyWith(cells: cells), selectedObjectIds: state.selectedObjectIds.where((sid) => sid != id).toSet());
+    if (changed) {
+      state = state.copyWith(
+        whiteboard: state.whiteboard.copyWith(cells: cells),
+        selectedObjectIds: state.selectedObjectIds.where((sid) => sid != id).toSet(),
+      );
+    }
   }
+
   void removeSelected() {
-    for (final id in state.selectedObjectIds) removeObject(id);
-    state = state.copyWith(selectedObjectIds: {});
+    if (state.selectedObjectIds.isEmpty) return;
+    _saveMemento();
+    final cells = Map<String, List<BoardObject>>.from(state.whiteboard.cells);
+    final idsToRemove = state.selectedObjectIds;
+
+    for (final key in cells.keys.toList()) {
+      cells[key] = cells[key]!.where((o) => !idsToRemove.contains(o.id)).toList();
+      if (cells[key]!.isEmpty) cells.remove(key);
+    }
+
+    state = state.copyWith(
+      whiteboard: state.whiteboard.copyWith(cells: cells),
+      selectedObjectIds: {},
+    );
   }
+
   void markAsSaved() => state = state.copyWith(hasBeenSaved: true);
 }
 final whiteboardProvider = NotifierProvider<WhiteboardNotifier, WhiteboardState>(WhiteboardNotifier.new);
@@ -102,10 +180,10 @@ class StorageNotifier extends AsyncNotifier<List<String>> {
   Future<void> saveBoard(Whiteboard board) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('board_${board.title}', jsonEncode(board.toJson()));
-    final titles = await build();
+    final titles = (await SharedPreferences.getInstance()).getStringList('boards') ?? [];
     if (!titles.contains(board.title)) {
       titles.add(board.title);
-      await prefs.setStringList('boards', titles);
+      await (await SharedPreferences.getInstance()).setStringList('boards', titles);
       ref.invalidateSelf();
     }
   }
@@ -118,15 +196,17 @@ class StorageNotifier extends AsyncNotifier<List<String>> {
   Future<void> deleteBoard(String title) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('board_$title');
-    final titles = await build();
+    final titles = (await SharedPreferences.getInstance()).getStringList('boards') ?? [];
     titles.remove(title);
-    await prefs.setStringList('boards', titles);
+    await (await SharedPreferences.getInstance()).setStringList('boards', titles);
     ref.invalidateSelf();
   }
 }
 final storageProvider = AsyncNotifierProvider<StorageNotifier, List<String>>(StorageNotifier.new);
 
-final transformationControllerProvider = Provider((ref) => TransformationController());
+// --- Intents for Shortcuts ---
+class UndoIntent extends Intent { const UndoIntent(); }
+class RedoIntent extends Intent { const RedoIntent(); }
 
 // --- UI Components ---
 
@@ -168,7 +248,7 @@ class MenuPage extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const Text('v0.2.0', style: TextStyle(color: Colors.grey)),
+                const Text('v0.2.1', style: TextStyle(color: Colors.grey)),
               ],
             ),
           ),
@@ -184,14 +264,35 @@ class WhiteboardPage extends ConsumerWidget {
   const WhiteboardPage({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(transformationControllerProvider);
-    return Scaffold(
-      body: Stack(
-        children: [
-          const WhiteboardCanvas(),
-          Positioned(top: 20, left: 20, child: FloatingActionButton.small(onPressed: () => Navigator.pop(context), child: const Icon(Icons.arrow_back))),
-          const Align(alignment: Alignment.bottomCenter, child: Padding(padding: EdgeInsets.only(bottom: 20), child: WhiteboardToolbar())),
-        ],
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): const UndoIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): const RedoIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): const RedoIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          UndoIntent: CallbackAction<UndoIntent>(onInvoke: (_) => ref.read(whiteboardProvider.notifier).undo()),
+          RedoIntent: CallbackAction<RedoIntent>(onInvoke: (_) => ref.read(whiteboardProvider.notifier).redo()),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            body: Stack(
+              children: [
+                const WhiteboardCanvas(),
+                Positioned(top: 20, left: 20, child: FloatingActionButton.small(heroTag: 'back_btn', onPressed: () => Navigator.pop(context), child: const Icon(Icons.arrow_back))),
+                const Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 30),
+                    child: WhiteboardToolbar(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -290,10 +391,13 @@ class WhiteboardToolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tool = ref.watch(toolProvider);
+    final wb = ref.watch(whiteboardProvider);
+
     return Card(
-      elevation: 4,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -301,8 +405,19 @@ class WhiteboardToolbar extends ConsumerWidget {
             _toolBtn(ref, ToolType.eraser, Icons.auto_fix_high, tool.type == ToolType.eraser),
             _toolBtn(ref, ToolType.text, Icons.text_fields, tool.type == ToolType.text),
             _toolBtn(ref, ToolType.select, Icons.near_me, tool.type == ToolType.select),
-            const VerticalDivider(),
-            IconButton(icon: const Icon(Icons.save), onPressed: () => _save(context, ref)),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
+            IconButton(
+              icon: const Icon(Icons.undo),
+              onPressed: wb.undoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).undo(),
+              tooltip: 'Undo (Ctrl+Z)',
+            ),
+            IconButton(
+              icon: const Icon(Icons.redo),
+              onPressed: wb.redoStack.isEmpty ? null : () => ref.read(whiteboardProvider.notifier).redo(),
+              tooltip: 'Redo (Ctrl+Y)',
+            ),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: VerticalDivider(width: 1, thickness: 1)),
+            IconButton(icon: const Icon(Icons.save), onPressed: () => _save(context, ref), tooltip: 'Save Board'),
           ],
         ),
       ),
