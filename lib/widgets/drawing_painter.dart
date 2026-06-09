@@ -19,36 +19,11 @@ class DrawingPainter extends CustomPainter {
 
     final path = Path();
     
-    // Original bounding box from points
-    double minX = drawing.points.first.dx;
-    double maxX = drawing.points.first.dx;
-    double minY = drawing.points.first.dy;
-    double maxY = drawing.points.first.dy;
-
-    for (var p in drawing.points) {
-      if (p.dx < minX) minX = p.dx;
-      if (p.dx > maxX) maxX = p.dx;
-      if (p.dy < minY) minY = p.dy;
-      if (p.dy > maxY) maxY = p.dy;
-    }
-
-    final origW = maxX - minX;
-    final origH = maxY - minY;
-    
-    // Scale factor to fit the current widget size
-    final scaleX = origW > 0 ? size.width / origW : 1.0;
-    final scaleY = origH > 0 ? size.height / origH : 1.0;
-
-    path.moveTo(
-      (drawing.points.first.dx - minX) * scaleX,
-      (drawing.points.first.dy - minY) * scaleY,
-    );
+    // Points are already normalized relative to (0,0) in _finishDrawing
+    path.moveTo(drawing.points.first.dx, drawing.points.first.dy);
 
     for (int i = 1; i < drawing.points.length; i++) {
-      path.lineTo(
-        (drawing.points[i].dx - minX) * scaleX,
-        (drawing.points[i].dy - minY) * scaleY,
-      );
+      path.lineTo(drawing.points[i].dx, drawing.points[i].dy);
     }
 
     canvas.drawPath(path, paint);

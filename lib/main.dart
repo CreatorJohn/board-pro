@@ -74,6 +74,13 @@ class MenuPage extends ConsumerWidget {
                         },
                       ),
               ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'v0.1.0+1',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ),
             ],
           ),
         ),
