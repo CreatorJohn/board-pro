@@ -319,7 +319,10 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         return GestureDetector(
           onPanStart: (d) {
             if (tool.type == ToolType.pen) {
-              setState(() { _isDrawing = true; _currentPoints = [d.localPosition]; });
+              setState(() {
+                _isDrawing = true;
+                _currentPoints = [d.localPosition];
+              });
             }
           },
           onPanUpdate: (d) {
@@ -328,25 +331,25 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
           onPanEnd: (d) {
             if (_isDrawing) {
               _finishDrawing();
-              setState(() { _isDrawing = false; _currentPoints = []; });
+              setState(() {
+                _isDrawing = false;
+                _currentPoints = [];
+              });
             }
           },
           child: Container(
             width: constraints.maxWidth,
             height: constraints.maxHeight,
             color: Colors.white,
-            child: Stack(
-              children: [
-                ...wb.whiteboard.cells.entries.expand((e) {
-                  final coords = e.key.split(' ');
-                  final origin = Offset(double.parse(coords[0]) * cellSize, double.parse(coords[1]) * cellSize);
-                  return e.value.map((obj) => Positioned(
-                    left: origin.dx + obj.x, top: origin.dy + obj.y,
-                    child: _buildObject(obj),
-                  ));
-                }),
-                if (_isDrawing) CustomPaint(painter: FreehandPainter(_currentPoints, tool.color, tool.strokeWidth)),
-              ],
+            child: CustomPaint(
+              painter: BoardPainter(
+                whiteboard: wb.whiteboard,
+                currentPoints: _currentPoints,
+                isDrawing: _isDrawing,
+                toolColor: tool.color,
+                toolStrokeWidth: tool.strokeWidth,
+                cellSize: cellSize,
+              ),
             ),
           ),
         );
@@ -371,19 +374,107 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
 
     final drawing = DrawingObject(
       id: const Uuid().v4(),
-      x: minX - origin.dx - padding, y: minY - origin.dy - padding,
-      width: maxX - minX + padding * 2, height: maxY - minY + padding * 2,
+      x: minX - origin.dx - padding,
+      y: minY - origin.dy - padding,
+      width: maxX - minX + padding * 2,
+      height: maxY - minY + padding * 2,
       points: _currentPoints.map((p) => Offset(p.dx - minX + padding, p.dy - minY + padding)).toList(),
-      color: tool.color.toARGB32(), strokeWidth: tool.strokeWidth,
+      color: tool.color.toARGB32(),
+      strokeWidth: tool.strokeWidth,
     );
     ref.read(whiteboardProvider.notifier).addObject(cellKey, drawing);
   }
+}
 
-  Widget _buildObject(BoardObject obj) {
-    if (obj is DrawingObject) return CustomPaint(size: Size(obj.width, obj.height), painter: DrawingPainter(obj));
-    if (obj is TextObject) return Text(obj.text, style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize));
-    return const SizedBox();
+class BoardPainter extends CustomPainter {
+  final Whiteboard whiteboard;
+  final List<Offset> currentPoints;
+  final bool isDrawing;
+  final Color toolColor;
+  final double toolStrokeWidth;
+  final double cellSize;
+
+  BoardPainter({
+    required this.whiteboard,
+    required this.currentPoints,
+    required this.isDrawing,
+    required this.toolColor,
+    required this.toolStrokeWidth,
+    required this.cellSize,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Draw all saved objects
+    for (final entry in whiteboard.cells.entries) {
+      final key = entry.key;
+      final coords = key.split(' ');
+      final cellOrigin = Offset(
+        double.parse(coords[0]) * cellSize,
+        double.parse(coords[1]) * cellSize,
+      );
+
+      for (final obj in entry.value) {
+        canvas.save();
+        canvas.translate(cellOrigin.dx + obj.x, cellOrigin.dy + obj.y);
+        
+        if (obj is DrawingObject) {
+          _drawDrawing(canvas, obj);
+        } else if (obj is TextObject) {
+          _drawText(canvas, obj);
+        }
+        
+        canvas.restore();
+      }
+    }
+
+    // 2. Draw current active stroke
+    if (isDrawing && currentPoints.length >= 2) {
+      final paint = Paint()
+        ..color = toolColor
+        ..strokeWidth = toolStrokeWidth
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+
+      final path = Path()..moveTo(currentPoints.first.dx, currentPoints.first.dy);
+      for (var p in currentPoints.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
   }
+
+  void _drawDrawing(Canvas canvas, DrawingObject obj) {
+    if (obj.points.isEmpty) return;
+    final paint = Paint()
+      ..color = Color(obj.color)
+      ..strokeWidth = obj.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()..moveTo(obj.points.first.dx, obj.points.first.dy);
+    for (var p in obj.points.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawText(Canvas canvas, TextObject obj) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: obj.text,
+        style: TextStyle(color: Color(obj.color), fontSize: obj.fontSize),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset.zero);
+  }
+
+  @override
+  bool shouldRepaint(covariant BoardPainter oldDelegate) => true;
 }
 
 class WhiteboardToolbar extends ConsumerWidget {
