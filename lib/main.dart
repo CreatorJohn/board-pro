@@ -212,45 +212,44 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   Widget build(BuildContext context) {
     final wb = ref.watch(whiteboardProvider);
     final tool = ref.watch(toolProvider);
-    final controller = ref.watch(transformationControllerProvider);
 
-    return InteractiveViewer(
-      transformationController: controller,
-      constrained: false,
-      boundaryMargin: const EdgeInsets.all(double.infinity),
-      minScale: 0.1, maxScale: 5.0,
-      child: GestureDetector(
-        onPanStart: (d) {
-          if (tool.type == ToolType.pen) {
-            setState(() { _isDrawing = true; _currentPoints = [d.localPosition]; });
-          }
-        },
-        onPanUpdate: (d) {
-          if (_isDrawing) setState(() { _currentPoints.add(d.localPosition); });
-        },
-        onPanEnd: (d) {
-          if (_isDrawing) {
-            _finishDrawing();
-            setState(() { _isDrawing = false; _currentPoints = []; });
-          }
-        },
-        child: Container(
-          width: 5000, height: 5000, color: Colors.white,
-          child: Stack(
-            children: [
-              ...wb.whiteboard.cells.entries.expand((e) {
-                final coords = e.key.split(' ');
-                final origin = Offset(double.parse(coords[0]) * cellSize, double.parse(coords[1]) * cellSize);
-                return e.value.map((obj) => Positioned(
-                  left: origin.dx + obj.x, top: origin.dy + obj.y,
-                  child: _buildObject(obj),
-                ));
-              }),
-              if (_isDrawing) CustomPaint(painter: FreehandPainter(_currentPoints, tool.color, tool.strokeWidth)),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          onPanStart: (d) {
+            if (tool.type == ToolType.pen) {
+              setState(() { _isDrawing = true; _currentPoints = [d.localPosition]; });
+            }
+          },
+          onPanUpdate: (d) {
+            if (_isDrawing) setState(() { _currentPoints.add(d.localPosition); });
+          },
+          onPanEnd: (d) {
+            if (_isDrawing) {
+              _finishDrawing();
+              setState(() { _isDrawing = false; _currentPoints = []; });
+            }
+          },
+          child: Container(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            color: Colors.white,
+            child: Stack(
+              children: [
+                ...wb.whiteboard.cells.entries.expand((e) {
+                  final coords = e.key.split(' ');
+                  final origin = Offset(double.parse(coords[0]) * cellSize, double.parse(coords[1]) * cellSize);
+                  return e.value.map((obj) => Positioned(
+                    left: origin.dx + obj.x, top: origin.dy + obj.y,
+                    child: _buildObject(obj),
+                  ));
+                }),
+                if (_isDrawing) CustomPaint(painter: FreehandPainter(_currentPoints, tool.color, tool.strokeWidth)),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
