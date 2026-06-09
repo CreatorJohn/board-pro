@@ -242,7 +242,15 @@ class WhiteboardPage extends ConsumerWidget {
             onInvoke: (RedoIntent intent) => ref.read(whiteboardProvider.notifier).redo(),
           ),
           DeleteIntent: CallbackAction<DeleteIntent>(
-            onInvoke: (DeleteIntent intent) => ref.read(whiteboardProvider.notifier).removeSelected(),
+            onInvoke: (DeleteIntent intent) {
+              final selected = ref.read(whiteboardProvider).selectedObjectIds;
+              if (selected.isNotEmpty) {
+                ref.read(whiteboardProvider.notifier).removeSelected();
+              } else {
+                _showClearBoardDialog(context, ref);
+              }
+              return null;
+            },
           ),
           BringToFrontIntent: CallbackAction<BringToFrontIntent>(
             onInvoke: (BringToFrontIntent intent) => ref.read(whiteboardProvider.notifier).bringToFront(),
@@ -288,13 +296,7 @@ class WhiteboardPage extends ConsumerWidget {
                       FloatingActionButton.small(
                         tooltip: 'Center View',
                         onPressed: () {
-                          const virtualSize = 100000.0;
-                          const initialOffset = Offset(virtualSize / 2, virtualSize / 2);
-                          ref.read(transformationControllerProvider).value = Matrix4.translationValues(
-                            -initialOffset.dx,
-                            -initialOffset.dy,
-                            0,
-                          );
+                          ref.read(transformationControllerProvider).value = Matrix4.identity();
                         },
                         child: const Icon(Icons.home),
                       ),
@@ -318,6 +320,27 @@ class WhiteboardPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showClearBoardDialog(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Board'),
+        content: const Text('Are you sure you want to clear the entire whiteboard? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      ref.read(whiteboardProvider.notifier).clearContents();
+    }
   }
 }
 

@@ -337,6 +337,14 @@ class WhiteboardNotifier extends Notifier<WhiteboardState> {
     state = state.copyWith(hasBeenSaved: true);
   }
 
+  void clearContents() {
+    _saveToHistory();
+    state = state.copyWith(
+      whiteboard: state.whiteboard.copyWith(cells: {}),
+      clearSelection: true,
+    );
+  }
+
   void clearBoard() {
     _saveToHistory();
     state = state.copyWith(

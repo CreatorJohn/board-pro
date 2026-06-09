@@ -35,22 +35,12 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
   Offset? _lineStart;
   Offset? _lineEnd;
 
-  // Reduced virtual size to avoid GTK surface limits (100k -> 5k)
-  static const double virtualSize = 5000;
-  static const Offset initialOffset = Offset(virtualSize / 2, virtualSize / 2);
   static const double cellSize = 1000.0;
   static const double panThreshold = 5.0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(transformationControllerProvider).value = Matrix4.translationValues(
-        -initialOffset.dx,
-        -initialOffset.dy,
-        0,
-      );
-    });
   }
 
   Offset _toGlobal(Offset local, Matrix4 transform) {
@@ -456,8 +446,8 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
         onPointerCancel: (event) => _onPointerCancel(event, toolState),
         child: Container(
           color: Colors.white,
-          width: virtualSize,
-          height: virtualSize,
+          width: screenSize.width,
+          height: screenSize.height,
           child: Stack(
             children: [
               // 1. Static Baked Layer (Everything non-selected)
