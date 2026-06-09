@@ -446,6 +446,7 @@ class _WhiteboardCanvasState extends ConsumerState<WhiteboardCanvas> {
                     cells: whiteboardState.whiteboard.cells,
                     selectedIds: selectedIds,
                     cellSize: cellSize,
+                    viewport: viewport,
                   ),
                 ),
               ),

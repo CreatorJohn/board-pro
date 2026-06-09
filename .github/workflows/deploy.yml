@@ -22,8 +22,8 @@ jobs:
         
       - name: Build Web
         # Changed base-href to "/" because the custom domain maps to the root
-        # Forced canvaskit renderer for better graphics stability
-        run: flutter build web --base-href "/" --web-renderer canvaskit --no-wasm-dry-run
+        # Forced canvaskit renderer via dart-define (deprecated --web-renderer removed in newer Flutter)
+        run: flutter build web --base-href "/" --dart-define=FLUTTER_WEB_RENDERER=canvaskit --no-wasm-dry-run
         
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
